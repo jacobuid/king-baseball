@@ -9,7 +9,7 @@ config.autoAddCss = false
 const icons = { team: faUsers, user: faUser, plus: faPlus, trash: faTrashCan, music: faMusic, ball: faBaseball, close: faXmark, chevronRight: faChevronRight, chevronLeft: faChevronLeft, arrowRight: faArrowRight, image: faImage }
 
 export function Icon({ name = 'team', size = 24 }) {
-  return <FontAwesomeIcon icon={icons[name] || icons.team} aria-hidden="true" style={{ width: size, height: size }} />
+  return <FontAwesomeIcon className={`app-icon icon-${name}`} icon={icons[name] || icons.team} aria-hidden="true" style={{ width: size, height: size }} />
 }
 export function Modal({ title, children, onClose, className = '', iconName = 'music' }) {
   const ref = useRef(null)

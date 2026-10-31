@@ -5,6 +5,7 @@ import { TeamPage } from './TeamPage'
 import { Icon } from './ui'
 import { AppLoadingProvider, StartupReady, useAppLoading } from './LoadingScreen'
 import './style.css'
+import './theme.css'
 
 const key = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
 const appUrl = new URL(import.meta.env.BASE_URL, window.location.origin).href
@@ -29,6 +30,6 @@ function App() {
   return <div className="app"><Header account={<UserButton />} /><TeamPage key={user.id} userId={user.id} /><nav className="bottom-nav" aria-label="Main menu" onClick={event => { const link = event.target.closest("a[href]"); if (!link || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return; const href = link.getAttribute("href"); if (!href.startsWith("#/")) return; event.preventDefault(); navigate(href) }}><a className="nav-item active" href="#/team" aria-current="page"><Icon /><span>Team</span></a></nav></div>
 }
 function Welcome() {
-  return <div className="app welcome"><Header /><main className="form-panel"><h2>Your team starts here.</h2><p className="welcome-copy">Sign in to create your roster and assign walk-up music.</p>{key ? <SignInButton mode="modal"><button className="save">Sign in to King Baseball <Icon name="arrowRight" size={15} /></button></SignInButton> : <p>Set VITE_CLERK_PUBLISHABLE_KEY to enable sign-in.</p>}</main></div>
+  return <div className="app welcome"><Header /><main className="form-panel"><h2>Your team starts here.</h2><p className="welcome-copy">Sign in to create your roster and assign walk-up music.</p>{key ? <SignInButton mode="modal"><button className="save button-primary">Sign in to King Baseball <Icon name="arrowRight" size={15} /></button></SignInButton> : <p>Set VITE_CLERK_PUBLISHABLE_KEY to enable sign-in.</p>}</main></div>
 }
 createRoot(document.getElementById('root')).render(<AppLoadingProvider needsAuthentication={!!key}>{key ? <ClerkProvider publishableKey={key} signInForceRedirectUrl={appUrl} signUpForceRedirectUrl={appUrl} afterSignOutUrl={appUrl}><ClerkLoaded><StartupReady /></ClerkLoaded><SignedOut><Welcome /></SignedOut><SignedIn><App /></SignedIn></ClerkProvider> : <Welcome />}</AppLoadingProvider>)

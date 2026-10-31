@@ -1,0 +1,47 @@
+/* Brand palette: the loading gradient and the existing add-player yellow. */
+:root {
+  --theme-blue-dark: #041c36;
+  --theme-blue-light: #123c67;
+  --theme-yellow: #ffb65f;
+  --button-secondary-background: #eaf3ff;
+  --button-secondary-border: #c7ddf6;
+  --button-secondary-text: #1d67bc;
+  --button-tertiary-background: #eff4fb;
+  --button-tertiary-border: #d8e4f0;
+  --button-tertiary-text: #6085ac;
+}
+
+.icon-ball { color: var(--theme-blue-dark); }
+
+.loading-screen {
+  background: radial-gradient(ellipse at 50% 42%, var(--theme-blue-light) 0%, #082c51 43%, var(--theme-blue-dark) 100%);
+}
+
+.button-primary {
+  background: var(--theme-blue-dark);
+  color: #fff;
+  border: 0;
+}
+.button-primary:hover:not(:disabled) { background: var(--theme-blue-light); }
+
+/* Keep the existing Add music appearance as the secondary button style. */
+.button-secondary {
+  background: var(--button-secondary-background);
+  border: 1px solid var(--button-secondary-border);
+  color: var(--button-secondary-text);
+}
+.button-secondary:hover:not(:disabled) { background: #deecff; }
+
+.button-tertiary {
+  background: var(--button-tertiary-background);
+  border: 1px solid var(--button-tertiary-border);
+  color: var(--button-tertiary-text);
+}
+.button-tertiary:hover:not(:disabled) {
+  background: #e3ebf5;
+  border-color: #b7cce0;
+  color: var(--theme-blue-dark);
+}
+
+.add-btn { background: var(--theme-yellow); color: var(--theme-blue-dark); }
+.bottom-nav { background: var(--theme-blue-dark); }
