@@ -46,4 +46,4 @@
 }
 
 .add-btn { background: var(--theme-yellow); color: var(--theme-blue-dark); }
-.bottom-nav { background: var(--theme-blue-dark); }
+.bottom-nav { background: var(--button-primary-background); }
