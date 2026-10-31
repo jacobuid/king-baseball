@@ -1,5 +1,5 @@
 type TeamRow = { id: string; name: string; version: number; mutation_id: string; created_at: string; updated_at: string }
-type PlayerInput = { id: string; name: string }
+type PlayerInput = { id: string; name: string; jerseyNumber: string | null }
 type TeamInput = { name: string; version: number; players: PlayerInput[] }
 
 const json = (data: unknown, status = 200) => new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' } })
@@ -24,7 +24,9 @@ export function validateTeam(body: unknown): TeamInput | string {
     ids.add(player.id)
     names.add(playerName.toLowerCase())
     // Deliberately select only roster fields. Music never enters this data model.
-    players.push({ id: player.id, name: playerName })
+    const jerseyNumber = player.jerseyNumber ?? null
+    if (jerseyNumber !== null && (typeof jerseyNumber !== 'string' || !/^\d{2}$/.test(jerseyNumber))) return 'Jersey numbers must be two digits from 00 to 99'
+    players.push({ id: player.id, name: playerName, jerseyNumber })
   }
   return { name, version: input.version as number, players }
 }
@@ -32,7 +34,7 @@ export function validateTeam(body: unknown): TeamInput | string {
 async function readTeam(db: D1Database, userId: string) {
   const result = await db.batch([
     db.prepare('SELECT id,name,version,created_at,updated_at FROM teams WHERE owner_user_id = ?').bind(userId),
-    db.prepare('SELECT p.id,p.name,p.roster_order AS rosterOrder FROM players p JOIN teams t ON t.id = p.team_id WHERE t.owner_user_id = ? ORDER BY p.roster_order').bind(userId),
+    db.prepare('SELECT p.id,p.name,p.jersey_number AS jerseyNumber,p.roster_order AS rosterOrder FROM players p JOIN teams t ON t.id = p.team_id WHERE t.owner_user_id = ? ORDER BY p.roster_order').bind(userId),
   ])
   const team = result[0].results[0]
   return team ? { ...team, players: result[1].results } : null
@@ -75,7 +77,7 @@ export async function handleTeamRequest(request: Request, db: D1Database, userId
   // D1 executes the batch transactionally, including deletions and insertions.
   statements.push(db.prepare('DELETE FROM players WHERE team_id = ? AND EXISTS(SELECT 1 FROM teams WHERE id = ? AND owner_user_id = ? AND mutation_id = ?)').bind(teamId, teamId, userId, mutationId))
   input.players.forEach((player, order) => {
-    statements.push(db.prepare('INSERT INTO players(team_id,id,name,roster_order) SELECT ?,?,?,? WHERE EXISTS(SELECT 1 FROM teams WHERE id = ? AND owner_user_id = ? AND mutation_id = ?)').bind(teamId, player.id, player.name, order, teamId, userId, mutationId))
+    statements.push(db.prepare('INSERT INTO players(team_id,id,name,roster_order,jersey_number) SELECT ?,?,?,?,? WHERE EXISTS(SELECT 1 FROM teams WHERE id = ? AND owner_user_id = ? AND mutation_id = ?)').bind(teamId, player.id, player.name, order, player.jerseyNumber, teamId, userId, mutationId))
   })
   const results = await db.batch(statements)
   if (results[0].meta.changes !== 1) return json({ error: 'This team changed in another session. Reload the saved team before saving again.' }, 409)

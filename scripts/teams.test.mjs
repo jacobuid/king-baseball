@@ -11,6 +11,7 @@ class Database {
     this.sqlite.exec('PRAGMA foreign_keys = ON')
     this.sqlite.exec(readFileSync(new URL('../services/api/migrations/0001_initial.sql', import.meta.url), 'utf8'))
     this.sqlite.exec(readFileSync(new URL('../services/api/migrations/0002_teams.sql', import.meta.url), 'utf8'))
+    this.sqlite.exec(readFileSync(new URL('../services/api/migrations/0003_player_jersey_numbers.sql', import.meta.url), 'utf8'))
   }
   prepare(sql) {
     const db = this.sqlite
@@ -50,13 +51,13 @@ test('create and reload a team with stable player IDs and roster order; music ex
   const created = (await response.json()).team
   assert.equal(created.name, 'King Sluggers')
   assert.equal(created.version, 1)
-  assert.deepEqual(created.players, [{ id: first, name: 'Alex Smith', rosterOrder: 0 }, { id: second, name: 'Jordan', rosterOrder: 1 }])
+  assert.deepEqual(created.players, [{ id: first, name: 'Alex Smith', jerseyNumber: null, rosterOrder: 0 }, { id: second, name: 'Jordan', jerseyNumber: null, rosterOrder: 1 }])
   const saved = (await (await handleTeamRequest(request(), db, 'alice')).json()).team
   assert.equal(saved.id, created.id)
   assert.deepEqual(saved.players, created.players)
   assert.deepEqual(await (await handleTeamRequest(request(), db, 'someone-else')).json(), { team: null })
   const columns = db.sqlite.prepare('PRAGMA table_info(players)').all().map(row => row.name)
-  assert.deepEqual(columns, ['team_id', 'id', 'name', 'roster_order'])
+  assert.deepEqual(columns, ['team_id', 'id', 'name', 'roster_order', 'jersey_number'])
 }))
 test('update name, remove and reorder players without changing the team ID', () => withDb(async db => {
   const original = (await (await handleTeamRequest(request(team()), db, 'alice')).json()).team
@@ -66,7 +67,7 @@ test('update name, remove and reorder players without changing the team ID', () 
   assert.equal(saved.id, original.id)
   assert.equal(saved.name, 'New Name')
   assert.equal(saved.version, 2)
-  assert.deepEqual(saved.players, [{ id: second, name: 'Jordan Updated', rosterOrder: 0 }])
+  assert.deepEqual(saved.players, [{ id: second, name: 'Jordan Updated', jerseyNumber: null, rosterOrder: 0 }])
 }))
 test('account isolation and stale versions cannot replace a saved roster', () => withDb(async db => {
   await handleTeamRequest(request(team()), db, 'alice')
@@ -112,4 +113,22 @@ test('invalid team and player inputs do not create records', () => withDb(async 
   assert.equal((await handleTeamRequest(new Request('https://api.example/api/team', { method: 'PUT', body: '{}' }), db, 'alice')).status, 415)
   assert.equal((await handleTeamRequest(request(undefined, 'DELETE'), db, 'alice')).status, 405)
   assert.deepEqual(await (await handleTeamRequest(request(), db, 'alice')).json(), { team: null })
+}))
+
+test('jersey numbers preserve leading zeroes, accept boundaries, clear, and reject invalid values', () => withDb(async db => {
+  const body = team()
+  body.players[0].jerseyNumber = '00'
+  body.players[1].jerseyNumber = '99'
+  assert.equal((await handleTeamRequest(request(body), db, 'alice')).status, 201)
+  let saved = (await (await handleTeamRequest(request(), db, 'alice')).json()).team
+  assert.deepEqual(saved.players.map(p => p.jerseyNumber), ['00', '99'])
+  for (const invalid of ['0', '100', '-1', '1.5', 5, '', 'AA']) {
+    assert.equal((await handleTeamRequest(request({ ...team(1), players: [{ id: first, name: 'Alex', jerseyNumber: invalid }] }), db, 'alice')).status, 400)
+  }
+  assert.equal((await handleTeamRequest(request({ ...team(1), players: [{ id: first, name: 'Alex', jerseyNumber: '07' }] }), db, 'alice')).status, 200)
+  saved = (await (await handleTeamRequest(request(), db, 'alice')).json()).team
+  assert.equal(saved.players[0].jerseyNumber, '07')
+  assert.equal((await handleTeamRequest(request({ ...team(2), players: [{ id: first, name: 'Alex', jerseyNumber: null }] }), db, 'alice')).status, 200)
+  saved = (await (await handleTeamRequest(request(), db, 'alice')).json()).team
+  assert.equal(saved.players[0].jerseyNumber, null)
 }))
