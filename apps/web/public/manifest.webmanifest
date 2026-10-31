@@ -1,9 +1,9 @@
 {
-  "name": "Media Library",
-  "short_name": "Media",
-  "start_url": "./",
+  "name": "King Baseball",
+  "short_name": "King Baseball",
+  "start_url": "./#/team",
   "scope": "./",
   "display": "standalone",
-  "background_color": "#111827",
-  "theme_color": "#111827"
+  "background_color": "#f8fafd",
+  "theme_color": "#0a1d35"
 }

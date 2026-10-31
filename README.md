@@ -1,6 +1,6 @@
 # King Baseball
 
-Baseball application foundation using React, Vite, Clerk, Cloudflare Workers, D1, Backblaze B2, Pulumi, GitHub Pages, and GitHub Actions. The current UI and API still contain the original media-library starter; baseball features have not been implemented yet.
+Baseball application foundation using React, Vite, Clerk, Cloudflare Workers, D1, Backblaze B2, Pulumi, GitHub Pages, and GitHub Actions. The React Team screen supports roster creation, walk-up song metadata, local audio attachment and preview, and a bottom Team navigation link. Save Team persists the roster and audio in IndexedDB on the current device, scoped to the signed-in Clerk user; it does not yet sync to the API. The API still contains the original media-library starter.
 
 ## Create a project
 
