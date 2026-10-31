@@ -1,5 +1,6 @@
 import { createClerkClient } from '@clerk/backend'
 import { AwsClient } from 'aws4fetch'
+import { handleTeamRequest } from './teams'
 
 interface Env { DB: D1Database; CLERK_SECRET_KEY: string; CLERK_PUBLISHABLE_KEY: string; B2_KEY_ID: string; B2_APPLICATION_KEY: string; B2_ENDPOINT: string; B2_BUCKET: string; WEB_ORIGIN: string }
 type Media = { id: string; title: string; description: string; category: string; video_key: string; thumbnail_key: string | null; mime_type: string; created_at: string }
@@ -21,13 +22,14 @@ async function authorize(request: Request, env: Env) {
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const origin = request.headers.get('Origin')
-    const cors = { 'Access-Control-Allow-Origin': origin === env.WEB_ORIGIN ? origin : env.WEB_ORIGIN, 'Access-Control-Allow-Headers': 'Authorization, Content-Type', 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS', 'Vary': 'Origin' }
+    const cors = { 'Access-Control-Allow-Origin': origin === env.WEB_ORIGIN ? origin : env.WEB_ORIGIN, 'Access-Control-Allow-Headers': 'Authorization, Content-Type', 'Access-Control-Allow-Methods': 'GET, POST, PUT, OPTIONS', 'Vary': 'Origin' }
     if (request.method === 'OPTIONS') return new Response(null, { headers: cors })
     try {
       const userId = await authorize(request, env)
       if (!userId) return withCors(json({ error: 'Unauthorized' }, 401), cors)
       const url = new URL(request.url)
       const path = url.pathname
+      if (path === '/api/team') return withCors(await handleTeamRequest(request, env.DB, userId), cors)
       if (path === '/api/profiles' && request.method === 'GET') {
         const rows = await env.DB.prepare('SELECT id,name FROM profiles WHERE user_id = ? ORDER BY created_at').bind(userId).all()
         return withCors(json(rows.results), cors)

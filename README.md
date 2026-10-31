@@ -1,6 +1,18 @@
 # King Baseball
 
-Baseball application foundation using React, Vite, Clerk, Cloudflare Workers, D1, Backblaze B2, Pulumi, GitHub Pages, and GitHub Actions. The React Team screen supports roster creation, walk-up song metadata, local audio attachment and preview, and a bottom Team navigation link. Save Team persists the roster and audio in IndexedDB on the current device, scoped to the signed-in Clerk user; it does not yet sync to the API. The API still contains the original media-library starter.
+Baseball application foundation using React, Vite, Clerk, Cloudflare Workers, D1, Backblaze B2, Pulumi, GitHub Pages, and GitHub Actions. The React Team screen saves teams and players to the authenticated Cloudflare API and D1 database. Existing walk-up song editing and audio previews remain device-local; no music schema or music API is implemented. Legacy media-library API routes remain available.
+
+## Team and player data
+
+- Each Clerk account owns one team, matching the current single-team screen. Ownership comes from the verified session, never from a request field.
+- `teams` stores the team ID, owner, name, version, timestamps, and a mutation identifier used for safe concurrent saves.
+- `players` stores stable player IDs, team IDs, names, and zero-based roster order. There are no music fields.
+- `GET /api/team` returns `{ "team": null }` for a new account, otherwise the saved team and ordered players.
+- `PUT /api/team` accepts `{ "name": "Sluggers", "version": 0, "players": [{ "id": "<UUID>", "name": "Alex" }] }`. Use version `0` to create, or the returned version to update. The complete roster is saved atomically, including player removal and reordering. IDs are preserved across saves.
+- Team names allow 1–48 characters and player names 1–55. Each roster requires 1–100 players; duplicate IDs or normalized names are rejected. Stale saves return `409` without changing the roster.
+- Existing IndexedDB rosters load as drafts only when the account has no server team. Save Team uploads names and roster order, excluding music. A failed server load blocks saving until Retry succeeds, preventing accidental replacement of existing data.
+
+The API workflow applies `0002_teams.sql` before deploying the API. Deploy the API successfully before using the new frontend. No new credentials or repository variables are required.
 
 ## Create a project
 
@@ -38,7 +50,7 @@ In GitHub Settings > Pages, select GitHub Actions as the build source. Commit an
 
 Baseball uses Pulumi project `king-baseball`, stack `prod`; Worker `king-baseball-api`; D1 database `king-baseball-prod`; and bucket `jacobuid-king-baseball`. Do not point this project at the Videos Pulumi stack. Existing Backblaze runtime keys are retained during provisioning to avoid interrupting a running Worker if a later step fails; retire obsolete Baseball keys after verifying the new deployment.
 
-If the repo is private, confirm your GitHub plan supports Pages for private repositories. After deployment, open `https://jacobuid.github.io/king-baseball/`, sign in with the Baseball Clerk application, and check that profile creation succeeds. An empty media library is expected until the starter is replaced with baseball features.
+If the repo is private, confirm your GitHub plan supports Pages for private repositories. After deployment, open `https://jacobuid.github.io/king-baseball/`, sign in with the Baseball Clerk application, create a team with players, save, and reload to confirm that the roster persists.
 
 ## Development
 
