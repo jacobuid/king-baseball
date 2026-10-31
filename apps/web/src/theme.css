@@ -46,7 +46,15 @@
 }
 
 .add-btn { background: var(--theme-yellow); color: var(--theme-blue-dark); }
-.bottom-nav { background: var(--button-primary-background); }
+.bottom-nav {
+  background: var(--theme-blue-dark);
+  border-top-color: #ffffff18;
+}
+.bottom-nav .nav-item,
+.bottom-nav .nav-item.active,
+.bottom-nav .nav-item svg,
+.bottom-nav .nav-item.active svg { color: #fff; }
+.bottom-nav .nav-item:focus-visible { outline-color: #fff; }
 
 /* Signed-out welcome screen: stadium artwork fills the complete viewport. */
 .app.welcome {
