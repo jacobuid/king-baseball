@@ -8,7 +8,18 @@ import './style.css'
 const key = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
 const appUrl = new URL(import.meta.env.BASE_URL, window.location.origin).href
 function Header({ account }) {
-  return <header className="hero"><div className="top"><div className="brand"><div className="mark"><Icon name="ball" size={26} /></div><div><div className="brand-name">KING<span>BASEBALL</span></div><div className="brand-sub">TEAM MANAGER</div></div></div>{account}</div><div className="intro"><div className="eyebrow">YOUR LINEUP STARTS HERE</div><h1>Create your<br /><em>team.</em></h1><p>Build your roster. Give every player<br />their own walk-up music.</p></div></header>
+  return <header className="hero">
+    <img className="hero-background" src={`${import.meta.env.BASE_URL}hero-background.png`} alt="" fetchPriority="high" />
+    <div className="top">
+      <img className="hero-logo" src={`${import.meta.env.BASE_URL}logo.png`} alt="King Baseball" width="160" height="146" />
+      {account && <div className="hero-account">{account}</div>}
+    </div>
+    <div className="intro">
+      <div className="eyebrow">YOUR LINEUP STARTS HERE</div>
+      <h1>Create your<br /><em>team.</em></h1>
+      <p>Build your roster. Give every player<br />their own walk-up music.</p>
+    </div>
+  </header>
 }
 function App() {
   const { user } = useUser()
