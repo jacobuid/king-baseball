@@ -5,7 +5,7 @@ Baseball application foundation using React, Vite, Clerk, Cloudflare Workers, D1
 ## Team and player data
 
 - Each Clerk account owns one team, matching the current single-team screen. Ownership comes from the verified session, never from a request field.
-- `teams` stores the team ID, owner, name, version, timestamps, and a mutation identifier used for safe concurrent saves.
+- `teams` stores the team ID, owner, name, version, timestamps, a compact logo image, and a mutation identifier used for safe concurrent saves. Logos are resized in the browser (up to 384 pixels) and compressed before saving; original uploads are not stored. PNG, JPG, and WebP uploads up to 20 MB are supported. The optional `logoDataUrl` field is capped at 180,000 characters; `null` removes the logo and omitting the field preserves it.
 - `players` stores stable player IDs, team IDs, names, and zero-based roster order. There are no music fields.
 - `GET /api/team` returns `{ "team": null }` for a new account, otherwise the saved team and ordered players.
 - `PUT /api/team` accepts `{ "name": "Sluggers", "version": 0, "players": [{ "id": "<UUID>", "name": "Alex" }] }`. Use version `0` to create, or the returned version to update. The complete roster is saved atomically, including player removal and reordering. IDs are preserved across saves.

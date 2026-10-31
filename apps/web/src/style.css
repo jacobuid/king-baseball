@@ -48,3 +48,8 @@
 
 .close{display:inline-flex;align-items:center;justify-content:center;padding:0}
 .save{display:flex;align-items:center;justify-content:center;gap:10px}
+/* Compact logo uploader beside the team name. */
+.team-identity-row{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr);gap:14px;align-items:start}.team-name-control{min-width:0}.team-logo-control .label{font-size:9px;min-height:12px;letter-spacing:.8px}.team-logo-upload{width:100%;min-height:78px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;padding:10px 6px;border:1.5px dashed #dfaa50;border-radius:12px;background:#fffaf1;color:#b17823;font-size:11px;font-weight:750;overflow:hidden}.team-logo-upload:hover{background:#fff2d9;border-color:#b88124}.team-logo-upload img{display:block;width:100%;height:58px;object-fit:contain}.team-logo-upload.has-logo{padding:6px;gap:4px}.remove-team-logo{display:block;width:100%;border:0;background:none;color:#8c6570;padding:6px 0;min-height:32px;font-size:10px}.team-name-control .required{font-size:8px}.team-name-control .field{padding:0 10px;gap:8px}@media(max-width:360px){.team-identity-row{gap:10px}.team-name-control .label{font-size:9px;letter-spacing:.4px}.team-name-control .required{font-size:7px}}
+
+.player .remove-btn{color:#c43d3d}
+.player .remove-btn:hover{color:#a52525}

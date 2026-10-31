@@ -3,20 +3,24 @@ import { Icon } from './ui'
 
 async function resizeLogo(file) {
   if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) throw new Error('Choose a PNG, JPG, or WebP image.')
-  if (file.size > 10 * 1024 * 1024) throw new Error('Choose an image smaller than 10 MB.')
+  if (file.size > 20 * 1024 * 1024) throw new Error('Choose an image smaller than 20 MB.')
   const url = URL.createObjectURL(file)
   try {
     const image = new Image()
     image.src = url
     await image.decode()
-    const scale = Math.min(1, 384 / Math.max(image.naturalWidth, image.naturalHeight))
     const canvas = document.createElement('canvas')
-    canvas.width = Math.max(1, Math.round(image.naturalWidth * scale))
-    canvas.height = Math.max(1, Math.round(image.naturalHeight * scale))
-    canvas.getContext('2d').drawImage(image, 0, 0, canvas.width, canvas.height)
-    const logo = canvas.toDataURL('image/webp', .8)
-    if (logo.length > 180000) throw new Error('This logo is too detailed. Choose a simpler or smaller image.')
-    return logo
+    for (const edge of [384, 256, 128]) {
+      const scale = Math.min(1, edge / Math.max(image.naturalWidth, image.naturalHeight))
+      canvas.width = Math.max(1, Math.round(image.naturalWidth * scale))
+      canvas.height = Math.max(1, Math.round(image.naturalHeight * scale))
+      canvas.getContext('2d').drawImage(image, 0, 0, canvas.width, canvas.height)
+      for (const quality of [.84, .68, .5]) {
+        const logo = canvas.toDataURL('image/webp', quality)
+        if (logo.length <= 180000) return logo
+      }
+    }
+    throw new Error('Unable to compress this image. Try another logo.')
   } finally { URL.revokeObjectURL(url) }
 }
 

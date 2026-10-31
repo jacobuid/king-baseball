@@ -1,6 +1,6 @@
-type TeamRow = { id: string; name: string; version: number; mutation_id: string; created_at: string; updated_at: string }
+type TeamRow = { id: string; name: string; version: number; mutation_id: string; logo_data_url: string | null; created_at: string; updated_at: string }
 type PlayerInput = { id: string; name: string; jerseyNumber: string | null }
-type TeamInput = { name: string; version: number; players: PlayerInput[] }
+type TeamInput = { name: string; version: number; players: PlayerInput[]; logoDataUrl?: string | null }
 
 const json = (data: unknown, status = 200) => new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' } })
 
@@ -12,6 +12,14 @@ export function validateTeam(body: unknown): TeamInput | string {
   if (!name || name.length > 48) return 'Team name must be 1–48 characters'
   if (!Number.isSafeInteger(input.version) || (input.version as number) < 0) return 'Invalid team version'
   if (!Array.isArray(input.players) || input.players.length < 1 || input.players.length > 100) return 'A team must have 1–100 players'
+  if (input.logoDataUrl !== undefined && input.logoDataUrl !== null) {
+    if (typeof input.logoDataUrl !== 'string' || input.logoDataUrl.length > 180000 || !/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/]+={0,2}$/.test(input.logoDataUrl)) return 'Choose a PNG, JPG, or WebP team logo'
+    const [header, encoded] = input.logoDataUrl.split(',')
+    let bytes: string
+    try { bytes = atob(encoded) } catch { return 'Invalid team logo' }
+    const valid = header.includes('/png') ? bytes.startsWith('\x89PNG\r\n\x1a\n') : header.includes('/jpeg') ? bytes.startsWith('\xff\xd8\xff') : bytes.startsWith('RIFF') && bytes.slice(8, 12) === 'WEBP'
+    if (!valid) return 'Invalid team logo image'
+  }
   const players: PlayerInput[] = []
   const ids = new Set<string>()
   const names = new Set<string>()
@@ -28,12 +36,12 @@ export function validateTeam(body: unknown): TeamInput | string {
     if (jerseyNumber !== null && (typeof jerseyNumber !== 'string' || !/^\d{2}$/.test(jerseyNumber))) return 'Jersey numbers must be two digits from 00 to 99'
     players.push({ id: player.id, name: playerName, jerseyNumber })
   }
-  return { name, version: input.version as number, players }
+  return { name, version: input.version as number, players, logoDataUrl: input.logoDataUrl as string | null | undefined }
 }
 
 async function readTeam(db: D1Database, userId: string) {
   const result = await db.batch([
-    db.prepare('SELECT id,name,version,created_at,updated_at FROM teams WHERE owner_user_id = ?').bind(userId),
+    db.prepare('SELECT id,name,version,logo_data_url AS logoDataUrl,created_at,updated_at FROM teams WHERE owner_user_id = ?').bind(userId),
     db.prepare('SELECT p.id,p.name,p.jersey_number AS jerseyNumber,p.roster_order AS rosterOrder FROM players p JOIN teams t ON t.id = p.team_id WHERE t.owner_user_id = ? ORDER BY p.roster_order').bind(userId),
   ])
   const team = result[0].results[0]
@@ -53,7 +61,7 @@ export async function handleTeamRequest(request: Request, db: D1Database, userId
     const { done, value } = await reader.read()
     if (done) break
     size += value.byteLength
-    if (size > 64 * 1024) { await reader.cancel(); return json({ error: 'Team data is too large' }, 413) }
+    if (size > 256 * 1024) { await reader.cancel(); return json({ error: 'Team data is too large' }, 413) }
     chunks.push(value)
   }
   const bytes = new Uint8Array(size)
@@ -64,14 +72,15 @@ export async function handleTeamRequest(request: Request, db: D1Database, userId
   const input = validateTeam(body)
   if (typeof input === 'string') return json({ error: input }, 400)
 
-  const existing = await db.prepare('SELECT id,name,version,mutation_id FROM teams WHERE owner_user_id = ?').bind(userId).first<TeamRow>()
+  const existing = await db.prepare('SELECT id,name,version,mutation_id,logo_data_url FROM teams WHERE owner_user_id = ?').bind(userId).first<TeamRow>()
   if ((!existing && input.version !== 0) || (existing && input.version !== existing.version)) return json({ error: 'This team changed in another session. Reload the saved team before saving again.' }, 409)
   const teamId = existing?.id || crypto.randomUUID()
   const mutationId = crypto.randomUUID()
+  const logoDataUrl = input.logoDataUrl === undefined ? existing?.logo_data_url ?? null : input.logoDataUrl
   const statements = existing ? [
-    db.prepare('UPDATE teams SET name = ?,version = version + 1,mutation_id = ?,updated_at = CURRENT_TIMESTAMP WHERE id = ? AND owner_user_id = ? AND version = ?').bind(input.name, mutationId, teamId, userId, input.version),
+    db.prepare('UPDATE teams SET name = ?,logo_data_url = ?,version = version + 1,mutation_id = ?,updated_at = CURRENT_TIMESTAMP WHERE id = ? AND owner_user_id = ? AND version = ?').bind(input.name, logoDataUrl, mutationId, teamId, userId, input.version),
   ] : [
-    db.prepare('INSERT INTO teams(id,owner_user_id,name,mutation_id) VALUES(?,?,?,?) ON CONFLICT(owner_user_id) DO NOTHING').bind(teamId, userId, input.name, mutationId),
+    db.prepare('INSERT INTO teams(id,owner_user_id,name,mutation_id,logo_data_url) VALUES(?,?,?,?,?) ON CONFLICT(owner_user_id) DO NOTHING').bind(teamId, userId, input.name, mutationId, logoDataUrl),
   ]
   // All roster writes are conditional on this save winning the version check.
   // D1 executes the batch transactionally, including deletions and insertions.
@@ -82,5 +91,5 @@ export async function handleTeamRequest(request: Request, db: D1Database, userId
   const results = await db.batch(statements)
   if (results[0].meta.changes !== 1) return json({ error: 'This team changed in another session. Reload the saved team before saving again.' }, 409)
   // Return this mutation's result, rather than a separate read which could race a later save.
-  return json({ team: { id: teamId, name: input.name, version: input.version + 1, players: input.players.map((player, rosterOrder) => ({ ...player, rosterOrder })) } }, existing ? 200 : 201)
+  return json({ team: { id: teamId, name: input.name, logoDataUrl, version: input.version + 1, players: input.players.map((player, rosterOrder) => ({ ...player, rosterOrder })) } }, existing ? 200 : 201)
 }

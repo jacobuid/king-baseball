@@ -7,7 +7,7 @@ export function createTeamApi(getToken) {
     const response = await fetch(`${api.replace(/\/$/, '')}/api/team`, {
       method: team === undefined ? 'GET' : 'PUT',
       headers: { Authorization: `Bearer ${token}`, ...(team === undefined ? {} : { 'Content-Type': 'application/json' }) },
-      ...(team === undefined ? {} : { body: JSON.stringify({ name: team.name, version: team.version, players: team.players.map(({ id, name, jerseyNumber }) => ({ id, name, jerseyNumber: jerseyNumber ?? null })) }) }),
+      ...(team === undefined ? {} : { body: JSON.stringify({ name: team.name, logoDataUrl: team.logoDataUrl, version: team.version, players: team.players.map(({ id, name, jerseyNumber }) => ({ id, name, jerseyNumber: jerseyNumber ?? null })) }) }),
       cache: 'no-store',
       signal: AbortSignal.timeout(15000),
     })

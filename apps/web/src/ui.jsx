@@ -1,12 +1,12 @@
 import React, { useEffect, useRef } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { config } from '@fortawesome/fontawesome-svg-core'
-import { faUsers, faPlus, faTrashCan, faMusic, faBaseball, faXmark, faChevronRight, faChevronLeft, faArrowRight } from '@fortawesome/free-solid-svg-icons'
+import { faUsers, faPlus, faTrashCan, faMusic, faBaseball, faXmark, faChevronRight, faChevronLeft, faArrowRight, faImage } from '@fortawesome/free-solid-svg-icons'
 import '@fortawesome/fontawesome-svg-core/styles.css'
 
 config.autoAddCss = false
 
-const icons = { team: faUsers, plus: faPlus, trash: faTrashCan, music: faMusic, ball: faBaseball, close: faXmark, chevronRight: faChevronRight, chevronLeft: faChevronLeft, arrowRight: faArrowRight }
+const icons = { team: faUsers, plus: faPlus, trash: faTrashCan, music: faMusic, ball: faBaseball, close: faXmark, chevronRight: faChevronRight, chevronLeft: faChevronLeft, arrowRight: faArrowRight, image: faImage }
 
 export function Icon({ name = 'team', size = 24 }) {
   return <FontAwesomeIcon icon={icons[name] || icons.team} aria-hidden="true" style={{ width: size, height: size }} />

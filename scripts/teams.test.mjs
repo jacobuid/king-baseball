@@ -12,6 +12,7 @@ class Database {
     this.sqlite.exec(readFileSync(new URL('../services/api/migrations/0001_initial.sql', import.meta.url), 'utf8'))
     this.sqlite.exec(readFileSync(new URL('../services/api/migrations/0002_teams.sql', import.meta.url), 'utf8'))
     this.sqlite.exec(readFileSync(new URL('../services/api/migrations/0003_player_jersey_numbers.sql', import.meta.url), 'utf8'))
+    this.sqlite.exec(readFileSync(new URL('../services/api/migrations/0004_team_logos.sql', import.meta.url), 'utf8'))
   }
   prepare(sql) {
     const db = this.sqlite
@@ -109,7 +110,7 @@ test('invalid team and player inputs do not create records', () => withDb(async 
   }
   const invalidJson = new Request('https://api.example/api/team', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: '{' })
   assert.equal((await handleTeamRequest(invalidJson, db, 'alice')).status, 400)
-  assert.equal((await handleTeamRequest(request({ ...team(), excess: 'x'.repeat(65536) }), db, 'alice')).status, 413)
+  assert.equal((await handleTeamRequest(request({ ...team(), excess: 'x'.repeat(262144) }), db, 'alice')).status, 413)
   assert.equal((await handleTeamRequest(new Request('https://api.example/api/team', { method: 'PUT', body: '{}' }), db, 'alice')).status, 415)
   assert.equal((await handleTeamRequest(request(undefined, 'DELETE'), db, 'alice')).status, 405)
   assert.deepEqual(await (await handleTeamRequest(request(), db, 'alice')).json(), { team: null })
@@ -131,4 +132,21 @@ test('jersey numbers preserve leading zeroes, accept boundaries, clear, and reje
   assert.equal((await handleTeamRequest(request({ ...team(2), players: [{ id: first, name: 'Alex', jerseyNumber: null }] }), db, 'alice')).status, 200)
   saved = (await (await handleTeamRequest(request(), db, 'alice')).json()).team
   assert.equal(saved.players[0].jerseyNumber, null)
+}))
+
+test('team logo saves, reloads, survives older clients, and can be removed', () => withDb(async db => {
+  const logo = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aX1sAAAAASUVORK5CYII='
+  assert.equal((await handleTeamRequest(request({ ...team(), logoDataUrl: logo }), db, 'alice')).status, 201)
+  let saved = (await (await handleTeamRequest(request(), db, 'alice')).json()).team
+  assert.equal(saved.logoDataUrl, logo)
+  assert.deepEqual(await (await handleTeamRequest(request(), db, 'bob')).json(), { team: null })
+  assert.equal((await handleTeamRequest(request(team(1)), db, 'alice')).status, 200)
+  saved = (await (await handleTeamRequest(request(), db, 'alice')).json()).team
+  assert.equal(saved.logoDataUrl, logo)
+  for (const invalid of ['data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=', 'data:image/png;base64,aGVsbG8=', 'https://example.com/logo.png', 'data:image/png;base64,' + 'A'.repeat(180000), 123]) {
+    assert.equal((await handleTeamRequest(request({ ...team(2), logoDataUrl: invalid }), db, 'alice')).status, 400)
+  }
+  assert.equal((await handleTeamRequest(request({ ...team(2), logoDataUrl: null }), db, 'alice')).status, 200)
+  saved = (await (await handleTeamRequest(request(), db, 'alice')).json()).team
+  assert.equal(saved.logoDataUrl, null)
 }))
