@@ -1,6 +1,6 @@
-# King Baseball
+# KingSports
 
-Baseball application foundation using React, Vite, Clerk, Cloudflare Workers, D1, Backblaze B2, Pulumi, GitHub Pages, and GitHub Actions. The React Team screen saves teams and players to the authenticated Cloudflare API and D1 database. Existing walk-up song editing and audio previews remain device-local; no music schema or music API is implemented. Legacy media-library API routes remain available.
+KingSports application foundation using React, Vite, Clerk, Cloudflare Workers, D1, Backblaze B2, Pulumi, GitHub Pages, and GitHub Actions. The React Team screen saves teams and players to the authenticated Cloudflare API and D1 database. Existing walk-up song editing and audio previews remain device-local; no music schema or music API is implemented. Legacy media-library API routes remain available.
 
 ## Team and player data
 
@@ -16,13 +16,13 @@ The Team menu opens `TeamView` at `#/team`, with the saved team details and rost
 
 The optional team `division` field uses the shared choices in `shared/divisions.ts`: T-Ball, coach/machine pitch, 6U–18U, league and school levels, college levels, adult leagues, and professional categories. The Team screen uses a snapping wheel beneath the team name. Use Save Team to persist the selection; `null` clears it, while omitted fields preserve the saved division for older clients.
 
-TeamEdit provides a primary-color swatch beneath the team name, left of Division. `primaryColor` accepts a six-digit hex color (default `#16845b`) and saves with the team. TeamView derives dark surfaces and lighter accents from that choice for the team card, jerseys, division badge, and playback accents. King Baseball's navigation and branding retain the app theme. No colors are extracted from uploaded logos.
+TeamEdit provides a primary-color swatch beneath the team name, left of Division. `primaryColor` accepts a six-digit hex color (default `#16845b`) and saves with the team. TeamView derives dark surfaces and lighter accents from that choice for the team card, jerseys, division badge, and playback accents. KingSports's navigation and branding retain the app theme. No colors are extracted from uploaded logos.
 
 The API workflow applies pending migrations, including `0006_b2_team_logos.sql`, before deploying the API. Deploy the API successfully before using the new frontend.
 
 ### Enabling B2 logo uploads
 
-After pushing these changes, run **Provision infrastructure** once, then run **Web**. Provisioning automatically creates and installs `B2_LOGO_KEY_ID` and `B2_LOGO_APPLICATION_KEY` as Worker secrets using the existing bootstrap credentials. These separate credentials permit reading, writing, and deleting files only within the Baseball bucket's `team-logos/` prefix; the media-library key remains read-only. No new GitHub secrets need manual entry. Routine API deployments retain the installed Worker secrets.
+After pushing these changes, run **Provision infrastructure** once, then run **Web**. Provisioning automatically creates and installs `B2_LOGO_KEY_ID` and `B2_LOGO_APPLICATION_KEY` as Worker secrets using the existing bootstrap credentials. These separate credentials permit reading, writing, and deleting files only within the KingSports bucket's `team-logos/` prefix; the media-library key remains read-only. No new GitHub secrets need manual entry. Routine API deployments retain the installed Worker secrets.
 
 Existing D1 logos stay readable and migrate on their next successful team save. A failed upload never replaces the saved logo; a failed or conflicting D1 save attempts to remove only its own newly uploaded object. Previously successful objects are retained so existing signed URLs continue working. Old versions and any orphaned uploads whose cleanup failed can be retired separately after verifying the active references; selecting Remove logo clears the team reference without deleting its historical objects.
 
@@ -33,7 +33,7 @@ Existing D1 logos stay readable and migrate on their next successful team save. 
 3. Add the repository secrets listed below.
 4. Add the Clerk publishable key as the repository variable `VITE_CLERK_PUBLISHABLE_KEY`.
 5. Run the **Provision infrastructure** workflow.
-6. The Web workflow discovers the Baseball Worker URL from Cloudflare automatically. Set the optional repository variable `VITE_API_URL` only to override it (for example, for a custom API domain).
+6. The Web workflow discovers the KingSports Worker URL from Cloudflare automatically. Set the optional repository variable `VITE_API_URL` only to override it (for example, for a custom API domain).
 7. Enable GitHub Pages with **GitHub Actions** as its source and run the **Web** workflow.
 
 ## Repository secrets
@@ -53,17 +53,27 @@ The infrastructure workflow derives resource names from the GitHub owner and rep
 Upload the seven secrets and frontend publishable-key variable from your ignored local `.env` without entering them individually:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\bootstrap-secrets.ps1 -Repo jacobuid/king-baseball -File .env
+powershell -ExecutionPolicy Bypass -File .\scripts\bootstrap-secrets.ps1 -Repo jacobuid/king-sports -File .env
 ```
 
-Use a separate King Baseball Clerk application when Baseball and Videos need separate user pools. All three Clerk keys must belong to the same instance; both publishable-key values must be identical. Development keys can be used for initial verification; complete Clerk's production setup before switching to live keys.
+Use a separate KingSports Clerk application when KingSports and Videos need separate user pools. All three Clerk keys must belong to the same instance; both publishable-key values must be identical. Development keys can be used for initial verification; complete Clerk's production setup before switching to live keys.
 
 In GitHub Settings > Pages, select GitHub Actions as the build source. Commit and push the deployment fixes, then run **Provision infrastructure** before running **Web**. API and provisioning workflows share a concurrency group so they cannot update the Worker simultaneously.
 
-Baseball uses Pulumi project `king-baseball`, stack `prod`; Worker `king-baseball-api`; D1 database `king-baseball-prod`; and bucket `jacobuid-king-baseball`. Do not point this project at the Videos Pulumi stack. Existing Backblaze runtime keys are retained during provisioning to avoid interrupting a running Worker if a later step fails; retire obsolete Baseball keys after verifying the new deployment.
+KingSports uses Pulumi project `king-sports`, stack `prod`; Worker `king-sports-api`; D1 database `king-sports-prod`; and bucket `king-sports`. Do not point this project at the Videos Pulumi stack. Existing Backblaze runtime keys are retained during provisioning to avoid interrupting a running Worker if a later step fails; retire obsolete KingSports keys after verifying the new deployment.
 
-If the repo is private, confirm your GitHub plan supports Pages for private repositories. After deployment, open `https://jacobuid.github.io/king-baseball/`, sign in with the Baseball Clerk application, create a team with players, save, and reload to confirm that the roster persists.
+If the repo is private, confirm your GitHub plan supports Pages for private repositories. After deployment, open `https://jacobuid.github.io/king-sports/`, sign in with the KingSports Clerk application, create a team with players, save, and reload to confirm that the roster persists.
 
 ## Development
 
 Copy the example environment files, run `npm ci`, then use `npm run dev:api` and `npm run dev:web`. Run `npm run check` before committing.
+
+## Repository rename
+
+Rename the GitHub repository to `king-sports` under Settings > General, then update the local remote:
+
+```powershell
+git remote set-url origin https://github.com/jacobuid/king-sports.git
+```
+
+The workflows derive the Worker, bucket, and Pages path from the repository name. After pushing, run **Provision infrastructure** and then **Web** to create the new KingSports resources. If `VITE_API_URL` is set as a repository variable, remove it to use automatic discovery or update it to the new Worker URL. Rename the Clerk application display name to KingSports while retaining its current keys and user pool.

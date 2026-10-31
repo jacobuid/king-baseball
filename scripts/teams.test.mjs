@@ -236,7 +236,7 @@ test('B2 adapter signs private URLs and uploads image bytes, not base64 text', a
     calls.push({ method: req.method, url: req.url, type: req.headers.get('Content-Type'), signed: !!req.headers.get('Authorization'), body: new Uint8Array(await req.arrayBuffer()) })
     return new Response(null, { status: 200 })
   }
-  const storage = createLogoStorage({ B2_ENDPOINT: 'https://s3.us-west-004.backblazeb2.com', B2_BUCKET: 'baseball', B2_LOGO_KEY_ID: 'test-key', B2_LOGO_APPLICATION_KEY: 'test-secret' })
+  const storage = createLogoStorage({ B2_ENDPOINT: 'https://s3.us-west-004.backblazeb2.com', B2_BUCKET: 'king-sports', B2_LOGO_KEY_ID: 'test-key', B2_LOGO_APPLICATION_KEY: 'test-secret' })
   const key = 'team-logos/11111111-1111-4111-8111-111111111111/22222222-2222-4222-8222-222222222222.png'
   await storage.put(key, 'data:image/png;base64,iVBORw0KGgo=')
   assert.equal(calls[0].method, 'PUT')

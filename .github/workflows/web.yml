@@ -9,7 +9,7 @@ permissions:
   pages: write
   id-token: write
 concurrency:
-  group: baseball-web
+  group: sports-web
   cancel-in-progress: false
 jobs:
   deploy:

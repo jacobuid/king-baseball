@@ -12,7 +12,7 @@ if (!response.ok || !payload.success) {
   response = await fetch(endpoint, {
     method: 'PUT',
     headers,
-    body: JSON.stringify({ subdomain: process.env.CLOUDFLARE_WORKERS_SUBDOMAIN || 'media-bootstrap' }),
+    body: JSON.stringify({ subdomain: process.env.CLOUDFLARE_WORKERS_SUBDOMAIN || 'king-sports' }),
   })
   payload = await response.json()
 }

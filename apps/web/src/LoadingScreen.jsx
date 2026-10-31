@@ -4,8 +4,8 @@ const LoadingContext = createContext(null)
 export const useAppLoading = () => useContext(LoadingContext)
 
 export function LoadingScreen() {
-  return <div className="loading-screen" role="status" aria-label="Loading King Baseball">
-    <img className="loading-logo" src={`${import.meta.env.BASE_URL}logo.png`} alt="King Baseball" fetchPriority="high" />
+  return <div className="loading-screen" role="status" aria-label="Loading KingSports">
+    <img className="loading-logo" src={`${import.meta.env.BASE_URL}logo.png`} alt="KingSports" fetchPriority="high" />
     <span className="sr-only">Loading, please wait.</span>
   </div>
 }

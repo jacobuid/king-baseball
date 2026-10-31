@@ -1,5 +1,5 @@
 {
-  "name": "king-bootstrap",
+  "name": "king-sports",
   "private": true,
   "workspaces": ["apps/web", "services/api", "infrastructure/pulumi"],
   "scripts": {

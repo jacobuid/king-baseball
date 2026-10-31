@@ -3,6 +3,6 @@ import * as cloudflare from '@pulumi/cloudflare'
 
 const config = new pulumi.Config()
 const accountId = config.require('cloudflareAccountId')
-const projectSlug = config.get('projectSlug') || 'media-library'
+const projectSlug = config.get('projectSlug') || 'king-sports'
 const database = new cloudflare.D1Database(projectSlug, { accountId, name: `${projectSlug}-${pulumi.getStack()}` })
 export const databaseId = database.uuid

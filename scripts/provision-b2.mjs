@@ -2,7 +2,7 @@ import { appendFileSync } from 'node:fs'
 
 const keyId = process.env.B2_BOOTSTRAP_KEY_ID
 const applicationKey = process.env.B2_BOOTSTRAP_APPLICATION_KEY
-const bucketName = process.env.B2_BUCKET || 'media-bootstrap'
+const bucketName = process.env.B2_BUCKET || 'king-sports'
 const webOrigin = process.env.WEB_ORIGIN || 'http://localhost:5173'
 if (!keyId || !applicationKey) throw new Error('Backblaze bootstrap credentials are missing')
 
@@ -25,7 +25,7 @@ async function api(operation, body) {
 const listed = await api('b2_list_buckets', { accountId: auth.accountId, bucketName })
 let bucket = listed.buckets?.find(item => item.bucketName === bucketName)
 const corsRules = [{
-  corsRuleName: 'kingBaseballWebPlayback',
+  corsRuleName: 'kingSportsWebPlayback',
   allowedOrigins: [webOrigin],
   allowedHeaders: ['range'],
   allowedOperations: ['b2_download_file_by_id', 'b2_download_file_by_name', 's3_get', 's3_head'],
@@ -52,7 +52,7 @@ if (!bucket) {
   })
 }
 
-const keyPrefix = process.env.B2_KEY_PREFIX || 'media-worker-'
+const keyPrefix = process.env.B2_KEY_PREFIX || 'king-sports-worker-'
 const runtimeKey = await api('b2_create_key', {
   accountId: auth.accountId,
   keyName: `${keyPrefix}${Date.now()}`,

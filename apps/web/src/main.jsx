@@ -14,7 +14,7 @@ function Header({ account }) {
   return <header className="hero">
     <img className="hero-background" src={`${import.meta.env.BASE_URL}hero-background.png`} alt="" fetchPriority="high" />
     <div className="top">
-      <img className="hero-logo" src={`${import.meta.env.BASE_URL}logo.png`} alt="King Baseball" width="160" height="146" />
+      <img className="hero-logo" src={`${import.meta.env.BASE_URL}logo.png`} alt="KingSports" width="160" height="146" />
       {account && <div className="hero-account">{account}</div>}
     </div>
     <div className="intro">
@@ -75,12 +75,12 @@ function App() {
 function Welcome() {
   return <div className="app welcome">
     <img className="welcome-background" src={`${import.meta.env.BASE_URL}hero-background.png`} alt="" fetchPriority="high" />
-    <header className="welcome-brand"><img src={`${import.meta.env.BASE_URL}logo.png`} alt="King Baseball" width="160" height="146" /></header>
+    <header className="welcome-brand"><img src={`${import.meta.env.BASE_URL}logo.png`} alt="KingSports" width="160" height="146" /></header>
     <main className="welcome-panel">
       <p className="welcome-eyebrow">YOUR LINEUP STARTS HERE</p>
       <h1>Your team<br />starts here.</h1>
       <p className="welcome-copy">Sign in to create your roster and give every player their own walk-up music.</p>
-      {key ? <SignInButton mode="modal"><button className="save welcome-sign-in">Sign in to King Baseball <Icon name="arrowRight" size={15} /></button></SignInButton> : <p>Set VITE_CLERK_PUBLISHABLE_KEY to enable sign-in.</p>}
+      {key ? <SignInButton mode="modal"><button className="save welcome-sign-in">Sign in to KingSports <Icon name="arrowRight" size={15} /></button></SignInButton> : <p>Set VITE_CLERK_PUBLISHABLE_KEY to enable sign-in.</p>}
     </main>
   </div>
 }

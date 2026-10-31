@@ -7,7 +7,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: baseball-api
+  group: sports-api
   cancel-in-progress: false
 jobs:
   deploy:
@@ -47,7 +47,7 @@ jobs:
         env:
           D1_DATABASE_ID: ${{ steps.pulumi.outputs.databaseId }}
           PROJECT_SLUG: ${{ github.event.repository.name }}
-          B2_BUCKET: ${{ github.repository_owner }}-${{ github.event.repository.name }}
+          B2_BUCKET: ${{ github.event.repository.name }}
           WEB_ORIGIN: https://${{ github.repository_owner }}.github.io
           B2_BOOTSTRAP_KEY_ID: ${{ secrets.B2_BOOTSTRAP_KEY_ID }}
           B2_BOOTSTRAP_APPLICATION_KEY: ${{ secrets.B2_BOOTSTRAP_APPLICATION_KEY }}

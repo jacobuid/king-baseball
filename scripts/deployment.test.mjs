@@ -7,7 +7,7 @@ import { pathToFileURL } from 'node:url'
 import { spawnSync } from 'node:child_process'
 
 function fixture(run) {
-  const directory = mkdtempSync(join(tmpdir(), 'king-baseball-deployment-'))
+  const directory = mkdtempSync(join(tmpdir(), 'king-sports-deployment-'))
   try { run(directory) } finally { rmSync(directory, { recursive: true, force: true }) }
 }
 function execute(script, directory, env = {}, mock) {
@@ -24,16 +24,16 @@ function configFixture(directory) {
   mkdirSync(join(directory, 'services/api'), { recursive: true })
   writeFileSync(join(directory, 'services/api/wrangler.jsonc'), JSON.stringify({ name: 'old', d1_databases: [{}], vars: {} }))
 }
-test('API deployment retains the B2 endpoint and uses Baseball resource names', () => fixture(directory => {
+test('API deployment retains the B2 endpoint and uses KingSports resource names', () => fixture(directory => {
   configFixture(directory)
   const result = execute('configure-deployment.mjs', directory, {
-    D1_DATABASE_ID: 'test-database', PROJECT_SLUG: 'king-baseball',
-    B2_ENDPOINT: 'https://s3.test.example', B2_BUCKET: 'test-baseball', WEB_ORIGIN: 'https://test.github.io',
+    D1_DATABASE_ID: 'test-database', PROJECT_SLUG: 'king-sports',
+    B2_ENDPOINT: 'https://s3.test.example', B2_BUCKET: 'test-sports', WEB_ORIGIN: 'https://test.github.io',
   })
   assert.equal(result.status, 0, result.stderr)
   const config = JSON.parse(readFileSync(join(directory, 'services/api/wrangler.jsonc')))
-  assert.equal(config.name, 'king-baseball-api')
-  assert.equal(config.d1_databases[0].database_name, 'king-baseball-prod')
+  assert.equal(config.name, 'king-sports-api')
+  assert.equal(config.d1_databases[0].database_name, 'king-sports-prod')
   assert.equal(config.d1_databases[0].database_id, 'test-database')
   assert.equal(config.vars.B2_ENDPOINT, 'https://s3.test.example')
 }))
@@ -55,10 +55,10 @@ test('missing database ID fails before modifying deployment configuration', () =
 test('web deployment discovers its own Worker URL', () => fixture(directory => {
   const file = join(directory, 'github-env')
   const result = execute('resolve-api-url.mjs', directory, {
-    GITHUB_ENV: file, GITHUB_REPOSITORY: 'test/king-baseball', CLOUDFLARE_ACCOUNT_ID: 'test', CLOUDFLARE_API_TOKEN: 'test',
+    GITHUB_ENV: file, GITHUB_REPOSITORY: 'test/king-sports', CLOUDFLARE_ACCOUNT_ID: 'test', CLOUDFLARE_API_TOKEN: 'test',
   }, `async () => ({ ok: true, json: async () => ({ success: true, result: { subdomain: 'shared-account' } }) })`)
   assert.equal(result.status, 0, result.stderr)
-  assert.equal(readFileSync(file, 'utf8'), 'VITE_API_URL=https://king-baseball-api.shared-account.workers.dev\n')
+  assert.equal(readFileSync(file, 'utf8'), 'VITE_API_URL=https://king-sports-api.shared-account.workers.dev\n')
 }))
 test('web deployment respects an explicit API URL and rejects injected environment lines', () => fixture(directory => {
   const file = join(directory, 'github-env')

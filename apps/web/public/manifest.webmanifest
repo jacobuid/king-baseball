@@ -1,6 +1,6 @@
 {
-  "name": "King Baseball",
-  "short_name": "King Baseball",
+  "name": "KingSports",
+  "short_name": "KingSports",
   "start_url": "./#/team",
   "scope": "./",
   "display": "standalone",
