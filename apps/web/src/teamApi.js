@@ -9,6 +9,7 @@ export function createTeamApi(getToken) {
       headers: { Authorization: `Bearer ${token}`, ...(team === undefined ? {} : { 'Content-Type': 'application/json' }) },
       ...(team === undefined ? {} : { body: JSON.stringify({ name: team.name, version: team.version, players: team.players.map(({ id, name }) => ({ id, name })) }) }),
       cache: 'no-store',
+      signal: AbortSignal.timeout(15000),
     })
     const result = await response.json().catch(() => null)
     if (!response.ok) throw new Error(result?.error || `Team request failed (${response.status}). Please try again.`)
