@@ -27,6 +27,8 @@ const secrets = {
   CLERK_PUBLISHABLE_KEY: process.env.CLERK_PUBLISHABLE_KEY,
   B2_KEY_ID: process.env.B2_KEY_ID,
   B2_APPLICATION_KEY: process.env.B2_APPLICATION_KEY,
+  B2_LOGO_KEY_ID: process.env.B2_LOGO_KEY_ID,
+  B2_LOGO_APPLICATION_KEY: process.env.B2_LOGO_APPLICATION_KEY,
 }
 for (const [name, value] of Object.entries(secrets)) if (!value) throw new Error(`${name} is missing`)
 writeFileSync('services/api/.deployment-secrets.json', JSON.stringify(secrets))

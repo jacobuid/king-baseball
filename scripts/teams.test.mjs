@@ -3,7 +3,8 @@ import assert from 'node:assert/strict'
 import { DatabaseSync } from 'node:sqlite'
 import { readFileSync } from 'node:fs'
 import { DIVISIONS } from '../shared/divisions.ts'
-import { handleTeamRequest, validateTeam } from '../services/api/src/teams.ts'
+import { handleTeamRequest as handleRequest, validateTeam } from '../services/api/src/teams.ts'
+import { createLogoStorage } from '../services/api/src/logo-storage.ts'
 
 // Exercise the real SQL against SQLite, matching D1's prepared statements and atomic batch behavior.
 class Database {
@@ -15,6 +16,9 @@ class Database {
     this.sqlite.exec(readFileSync(new URL('../services/api/migrations/0003_player_jersey_numbers.sql', import.meta.url), 'utf8'))
     this.sqlite.exec(readFileSync(new URL('../services/api/migrations/0004_team_logos.sql', import.meta.url), 'utf8'))
     this.sqlite.exec(readFileSync(new URL('../services/api/migrations/0005_team_division.sql', import.meta.url), 'utf8'))
+    this.sqlite.exec(readFileSync(new URL('../services/api/migrations/0006_b2_team_logos.sql', import.meta.url), 'utf8'))
+    this.objects = new Map()
+    this.storage = { put: async (key, data) => { if (this.failUploads) throw new Error('B2 unavailable'); this.objects.set(key, data) }, url: async key => 'https://private-b2.example/' + key + '?signed=true', remove: async key => { this.objects.delete(key) } }
   }
   prepare(sql) {
     const db = this.sqlite
@@ -38,6 +42,7 @@ class Database {
   }
   close() { this.sqlite.close() }
 }
+const handleTeamRequest = (request, db, userId) => handleRequest(request, db, userId, db.storage)
 const first = '11111111-1111-4111-8111-111111111111'
 const second = '22222222-2222-4222-8222-222222222222'
 const team = (version = 0) => ({ name: '  King  Sluggers ', version, players: [{ id: first, name: ' Alex  Smith ' }, { id: second, name: 'Jordan' }] })
@@ -140,17 +145,21 @@ test('team logo saves, reloads, survives older clients, and can be removed', () 
   const logo = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aX1sAAAAASUVORK5CYII='
   assert.equal((await handleTeamRequest(request({ ...team(), logoDataUrl: logo }), db, 'alice')).status, 201)
   let saved = (await (await handleTeamRequest(request(), db, 'alice')).json()).team
-  assert.equal(saved.logoDataUrl, logo)
+  assert.equal(saved.logoDataUrl, null)
+  assert.match(saved.logoUrl, /^https:\/\/private-b2\.example\/team-logos\//)
+  assert.equal([...db.objects.values()][0], logo)
   assert.deepEqual(await (await handleTeamRequest(request(), db, 'bob')).json(), { team: null })
   assert.equal((await handleTeamRequest(request(team(1)), db, 'alice')).status, 200)
   saved = (await (await handleTeamRequest(request(), db, 'alice')).json()).team
-  assert.equal(saved.logoDataUrl, logo)
+  assert.equal(saved.logoDataUrl, null)
+  assert.match(saved.logoUrl, /^https:\/\/private-b2\.example\/team-logos\//)
   for (const invalid of ['data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=', 'data:image/png;base64,aGVsbG8=', 'https://example.com/logo.png', 'data:image/png;base64,' + 'A'.repeat(180000), 123]) {
     assert.equal((await handleTeamRequest(request({ ...team(2), logoDataUrl: invalid }), db, 'alice')).status, 400)
   }
   assert.equal((await handleTeamRequest(request({ ...team(2), logoDataUrl: null }), db, 'alice')).status, 200)
   saved = (await (await handleTeamRequest(request(), db, 'alice')).json()).team
   assert.equal(saved.logoDataUrl, null)
+  assert.equal(saved.logoUrl, null)
 }))
 
 test('all division choices validate and division persists, updates, and clears', () => withDb(async db => {
@@ -170,3 +179,72 @@ test('all division choices validate and division persists, updates, and clears',
   saved = (await (await handleTeamRequest(request(), db, 'alice')).json()).team
   assert.equal(saved.division, null)
 }))
+
+test('legacy inline logos remain readable and migrate to B2 only after a successful save', () => withDb(async db => {
+  await handleTeamRequest(request(team()), db, 'alice')
+  const logo = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aX1sAAAAASUVORK5CYII='
+  db.sqlite.prepare('UPDATE teams SET logo_data_url = ?').run(logo)
+  assert.equal((await (await handleTeamRequest(request(), db, 'alice')).json()).team.logoDataUrl, logo)
+  db.failUploads = true
+  assert.equal((await handleTeamRequest(request(team(1)), db, 'alice')).status, 502)
+  assert.equal(db.sqlite.prepare('SELECT logo_data_url FROM teams').get().logo_data_url, logo)
+  assert.equal(db.sqlite.prepare('SELECT version FROM teams').get().version, 1)
+  db.failUploads = false
+  assert.equal((await handleTeamRequest(request(team(1)), db, 'alice')).status, 200)
+  const row = db.sqlite.prepare('SELECT logo_data_url,logo_key FROM teams').get()
+  assert.equal(row.logo_data_url, null)
+  assert.ok(db.objects.has(row.logo_key))
+}))
+test('B2 uploads are cleaned up when the database save fails', () => withDb(async db => {
+  await handleTeamRequest(request(team()), db, 'alice')
+  const logo = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aX1sAAAAASUVORK5CYII='
+  db.sqlite.exec("CREATE TRIGGER reject_logo BEFORE UPDATE ON teams BEGIN SELECT RAISE(ABORT, 'test failure'); END")
+  await assert.rejects(handleTeamRequest(request({ ...team(1), logoDataUrl: logo }), db, 'alice'))
+  assert.equal(db.objects.size, 0)
+  assert.equal(db.sqlite.prepare('SELECT logo_key FROM teams').get().logo_key, null)
+}))
+
+test('failed replacement uploads preserve the previous logo and team version', () => withDb(async db => {
+  const logo = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aX1sAAAAASUVORK5CYII='
+  await handleTeamRequest(request({ ...team(), logoDataUrl: logo }), db, 'alice')
+  const original = db.sqlite.prepare('SELECT logo_key,version FROM teams').get()
+  db.failUploads = true
+  assert.equal((await handleTeamRequest(request({ ...team(1), logoDataUrl: logo }), db, 'alice')).status, 502)
+  assert.deepEqual(db.sqlite.prepare('SELECT logo_key,version FROM teams').get(), original)
+  assert.equal(db.objects.size, 1)
+}))
+test('concurrent logo saves clean only their own unused upload', () => withDb(async db => {
+  const logo = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aX1sAAAAASUVORK5CYII='
+  await handleTeamRequest(request({ ...team(), logoDataUrl: logo }), db, 'alice')
+  const originalKey = db.sqlite.prepare('SELECT logo_key FROM teams').get().logo_key
+  const batch = db.batch.bind(db)
+  db.batch = async statements => {
+    db.sqlite.exec("UPDATE teams SET version = 2,mutation_id = 'another-save'")
+    return batch(statements)
+  }
+  assert.equal((await handleTeamRequest(request({ ...team(1), logoDataUrl: logo }), db, 'alice')).status, 409)
+  assert.deepEqual([...db.objects.keys()], [originalKey])
+}))
+test('B2 adapter signs private URLs and uploads image bytes, not base64 text', async t => {
+  const originalFetch = globalThis.fetch
+  t.after(() => { globalThis.fetch = originalFetch })
+  const calls = []
+  globalThis.fetch = async (input, options) => {
+    const req = new Request(input, options)
+    calls.push({ method: req.method, url: req.url, type: req.headers.get('Content-Type'), signed: !!req.headers.get('Authorization'), body: new Uint8Array(await req.arrayBuffer()) })
+    return new Response(null, { status: 200 })
+  }
+  const storage = createLogoStorage({ B2_ENDPOINT: 'https://s3.us-west-004.backblazeb2.com', B2_BUCKET: 'baseball', B2_LOGO_KEY_ID: 'test-key', B2_LOGO_APPLICATION_KEY: 'test-secret' })
+  const key = 'team-logos/11111111-1111-4111-8111-111111111111/22222222-2222-4222-8222-222222222222.png'
+  await storage.put(key, 'data:image/png;base64,iVBORw0KGgo=')
+  assert.equal(calls[0].method, 'PUT')
+  assert.equal(calls[0].type, 'image/png')
+  assert.equal(calls[0].signed, true)
+  assert.deepEqual([...calls[0].body], [137, 80, 78, 71, 13, 10, 26, 10])
+  const signed = new URL(await storage.url(key))
+  assert.equal(signed.searchParams.get('X-Amz-Expires'), '3600')
+  assert.ok(signed.searchParams.get('X-Amz-Signature'))
+  await storage.remove(key)
+  assert.equal(calls[1].method, 'DELETE')
+  await assert.rejects(storage.url('movies/other.png'))
+})

@@ -55,6 +55,8 @@ jobs:
           B2_ENDPOINT: ${{ steps.b2.outputs.endpoint }}
           B2_KEY_ID: ${{ steps.b2.outputs.key_id }}
           B2_APPLICATION_KEY: ${{ steps.b2.outputs.application_key }}
+          B2_LOGO_KEY_ID: ${{ steps.b2.outputs.logo_key_id }}
+          B2_LOGO_APPLICATION_KEY: ${{ steps.b2.outputs.logo_application_key }}
           CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
           CLERK_PUBLISHABLE_KEY: ${{ secrets.CLERK_PUBLISHABLE_KEY }}
           WRITE_SECRETS: 'true'

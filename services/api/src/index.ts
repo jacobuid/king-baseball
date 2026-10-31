@@ -1,8 +1,9 @@
 import { createClerkClient } from '@clerk/backend'
 import { AwsClient } from 'aws4fetch'
 import { handleTeamRequest } from './teams'
+import { createLogoStorage } from './logo-storage'
 
-interface Env { DB: D1Database; CLERK_SECRET_KEY: string; CLERK_PUBLISHABLE_KEY: string; B2_KEY_ID: string; B2_APPLICATION_KEY: string; B2_ENDPOINT: string; B2_BUCKET: string; WEB_ORIGIN: string }
+interface Env { DB: D1Database; CLERK_SECRET_KEY: string; CLERK_PUBLISHABLE_KEY: string; B2_KEY_ID: string; B2_APPLICATION_KEY: string; B2_LOGO_KEY_ID: string; B2_LOGO_APPLICATION_KEY: string; B2_ENDPOINT: string; B2_BUCKET: string; WEB_ORIGIN: string }
 type Media = { id: string; title: string; description: string; category: string; video_key: string; thumbnail_key: string | null; mime_type: string; created_at: string }
 
 const json = (data: unknown, status = 200) => new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } })
@@ -29,7 +30,7 @@ export default {
       if (!userId) return withCors(json({ error: 'Unauthorized' }, 401), cors)
       const url = new URL(request.url)
       const path = url.pathname
-      if (path === '/api/team') return withCors(await handleTeamRequest(request, env.DB, userId), cors)
+      if (path === '/api/team') return withCors(await handleTeamRequest(request, env.DB, userId, createLogoStorage(env)), cors)
       if (path === '/api/profiles' && request.method === 'GET') {
         const rows = await env.DB.prepare('SELECT id,name FROM profiles WHERE user_id = ? ORDER BY created_at').bind(userId).all()
         return withCors(json(rows.results), cors)

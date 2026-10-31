@@ -1,6 +1,7 @@
 import { DIVISIONS } from '../../../shared/divisions.ts'
+import type { LogoStorage } from './logo-storage'
 
-type TeamRow = { id: string; name: string; version: number; mutation_id: string; logo_data_url: string | null; division: string | null; created_at: string; updated_at: string }
+type TeamRow = { id: string; name: string; version: number; mutation_id: string; logo_data_url: string | null; logo_key: string | null; division: string | null; created_at: string; updated_at: string }
 type PlayerInput = { id: string; name: string; jerseyNumber: string | null }
 type TeamInput = { name: string; version: number; players: PlayerInput[]; logoDataUrl?: string | null; division?: string | null }
 
@@ -42,17 +43,19 @@ export function validateTeam(body: unknown): TeamInput | string {
   return { name, version: input.version as number, players, logoDataUrl: input.logoDataUrl as string | null | undefined, division: input.division as string | null | undefined }
 }
 
-async function readTeam(db: D1Database, userId: string) {
+async function readTeam(db: D1Database, userId: string, storage: LogoStorage) {
   const result = await db.batch([
-    db.prepare('SELECT id,name,version,division,logo_data_url AS logoDataUrl,created_at,updated_at FROM teams WHERE owner_user_id = ?').bind(userId),
+    db.prepare('SELECT id,name,version,division,logo_key AS logoKey,logo_data_url AS logoDataUrl,created_at,updated_at FROM teams WHERE owner_user_id = ?').bind(userId),
     db.prepare('SELECT p.id,p.name,p.jersey_number AS jerseyNumber,p.roster_order AS rosterOrder FROM players p JOIN teams t ON t.id = p.team_id WHERE t.owner_user_id = ? ORDER BY p.roster_order').bind(userId),
   ])
-  const team = result[0].results[0]
-  return team ? { ...team, players: result[1].results } : null
+  const team = result[0].results[0] as Record<string, unknown> | undefined
+  if (!team) return null
+  const { logoKey, ...fields } = team
+  return { ...fields, logoUrl: logoKey ? await storage.url(logoKey as string) : null, players: result[1].results }
 }
 
-export async function handleTeamRequest(request: Request, db: D1Database, userId: string): Promise<Response> {
-  if (request.method === 'GET') return json({ team: await readTeam(db, userId) })
+export async function handleTeamRequest(request: Request, db: D1Database, userId: string, storage: LogoStorage): Promise<Response> {
+  if (request.method === 'GET') return json({ team: await readTeam(db, userId, storage) })
   if (request.method !== 'PUT') return new Response(JSON.stringify({ error: 'Method not allowed' }), { status: 405, headers: { Allow: 'GET, PUT', 'Content-Type': 'application/json' } })
   if (!request.headers.get('Content-Type')?.toLowerCase().startsWith('application/json')) return json({ error: 'Use application/json' }, 415)
   // Bound the complete body, including unknown fields, before parsing it.
@@ -75,16 +78,28 @@ export async function handleTeamRequest(request: Request, db: D1Database, userId
   const input = validateTeam(body)
   if (typeof input === 'string') return json({ error: input }, 400)
 
-  const existing = await db.prepare('SELECT id,name,version,mutation_id,logo_data_url,division FROM teams WHERE owner_user_id = ?').bind(userId).first<TeamRow>()
+  const existing = await db.prepare('SELECT id,name,version,mutation_id,logo_data_url,logo_key,division FROM teams WHERE owner_user_id = ?').bind(userId).first<TeamRow>()
   if ((!existing && input.version !== 0) || (existing && input.version !== existing.version)) return json({ error: 'This team changed in another session. Reload the saved team before saving again.' }, 409)
   const teamId = existing?.id || crypto.randomUUID()
   const mutationId = crypto.randomUUID()
   const logoDataUrl = input.logoDataUrl === undefined ? existing?.logo_data_url ?? null : input.logoDataUrl
+  let logoKey = input.logoDataUrl === null ? null : existing?.logo_key ?? null
+  let uploadedKey: string | null = null
+  if (logoDataUrl) {
+    const extension = logoDataUrl.slice(11, logoDataUrl.indexOf(';'))
+    uploadedKey = `team-logos/${teamId}/${crypto.randomUUID()}.${extension}`
+    try { await storage.put(uploadedKey, logoDataUrl); logoKey = uploadedKey }
+    catch (error) { return json({ error: error instanceof Error ? error.message : 'Logo upload failed. Please try again.' }, 502) }
+  }
+  // Generate the URL before committing, so missing credentials cannot produce a false save failure.
+  let logoUrl: string | null
+  try { logoUrl = logoKey ? await storage.url(logoKey) : null }
+  catch { if (uploadedKey) await storage.remove(uploadedKey).catch(() => {}); return json({ error: 'Could not prepare the logo. Please try again.' }, 502) }
   const division = input.division === undefined ? existing?.division ?? null : input.division
   const statements = existing ? [
-    db.prepare('UPDATE teams SET name = ?,logo_data_url = ?,division = ?,version = version + 1,mutation_id = ?,updated_at = CURRENT_TIMESTAMP WHERE id = ? AND owner_user_id = ? AND version = ?').bind(input.name, logoDataUrl, division, mutationId, teamId, userId, input.version),
+    db.prepare('UPDATE teams SET name = ?,logo_data_url = NULL,logo_key = ?,division = ?,version = version + 1,mutation_id = ?,updated_at = CURRENT_TIMESTAMP WHERE id = ? AND owner_user_id = ? AND version = ?').bind(input.name, logoKey, division, mutationId, teamId, userId, input.version),
   ] : [
-    db.prepare('INSERT INTO teams(id,owner_user_id,name,mutation_id,logo_data_url,division) VALUES(?,?,?,?,?,?) ON CONFLICT(owner_user_id) DO NOTHING').bind(teamId, userId, input.name, mutationId, logoDataUrl, division),
+    db.prepare('INSERT INTO teams(id,owner_user_id,name,mutation_id,logo_key,division) VALUES(?,?,?,?,?,?) ON CONFLICT(owner_user_id) DO NOTHING').bind(teamId, userId, input.name, mutationId, logoKey, division),
   ]
   // All roster writes are conditional on this save winning the version check.
   // D1 executes the batch transactionally, including deletions and insertions.
@@ -92,8 +107,14 @@ export async function handleTeamRequest(request: Request, db: D1Database, userId
   input.players.forEach((player, order) => {
     statements.push(db.prepare('INSERT INTO players(team_id,id,name,roster_order,jersey_number) SELECT ?,?,?,?,? WHERE EXISTS(SELECT 1 FROM teams WHERE id = ? AND owner_user_id = ? AND mutation_id = ?)').bind(teamId, player.id, player.name, order, player.jerseyNumber, teamId, userId, mutationId))
   })
-  const results = await db.batch(statements)
-  if (results[0].meta.changes !== 1) return json({ error: 'This team changed in another session. Reload the saved team before saving again.' }, 409)
+  let results: D1Result[]
+  try { results = await db.batch(statements) }
+  catch (error) { if (uploadedKey) await storage.remove(uploadedKey).catch(() => {}); throw error }
+  if (results[0].meta.changes !== 1) {
+    if (uploadedKey) await storage.remove(uploadedKey).catch(() => {})
+    return json({ error: 'This team changed in another session. Reload the saved team before saving again.' }, 409)
+  }
   // Return this mutation's result, rather than a separate read which could race a later save.
-  return json({ team: { id: teamId, name: input.name, logoDataUrl, division, version: input.version + 1, players: input.players.map((player, rosterOrder) => ({ ...player, rosterOrder })) } }, existing ? 200 : 201)
+  // Keep prior successful objects intact: another tab may still be displaying a signed URL.
+  return json({ team: { id: teamId, name: input.name, logoDataUrl: null, logoUrl, division, version: input.version + 1, players: input.players.map((player, rosterOrder) => ({ ...player, rosterOrder })) } }, existing ? 200 : 201)
 }

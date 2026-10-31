@@ -5,7 +5,7 @@ Baseball application foundation using React, Vite, Clerk, Cloudflare Workers, D1
 ## Team and player data
 
 - Each Clerk account owns one team, matching the current single-team screen. Ownership comes from the verified session, never from a request field.
-- `teams` stores the team ID, owner, name, version, timestamps, a compact logo image, and a mutation identifier used for safe concurrent saves. Logos are resized in the browser (up to 384 pixels) and compressed before saving; original uploads are not stored. PNG, JPG, and WebP uploads up to 20 MB are supported. The optional `logoDataUrl` field is capped at 180,000 characters; `null` removes the logo and omitting the field preserves it.
+- `teams` stores the team ID, owner, name, version, timestamps, a B2 logo file key, and a mutation identifier used for safe concurrent saves. Logos are resized in the browser (up to 384 pixels), compressed, and uploaded by the authenticated Worker to private B2 storage; original uploads are not stored. PNG, JPG, and WebP uploads up to 20 MB are supported. The optional upload field `logoDataUrl` is capped at 180,000 characters; `null` removes the logo and omitting the field preserves it. Responses provide a signed `logoUrl` valid for one hour instead of embedding the image.
 - `players` stores stable player IDs, team IDs, names, and zero-based roster order. There are no music fields.
 - `GET /api/team` returns `{ "team": null }` for a new account, otherwise the saved team and ordered players.
 - `PUT /api/team` accepts `{ "name": "Sluggers", "version": 0, "players": [{ "id": "<UUID>", "name": "Alex" }] }`. Use version `0` to create, or the returned version to update. The complete roster is saved atomically, including player removal and reordering. IDs are preserved across saves.
@@ -14,7 +14,13 @@ Baseball application foundation using React, Vite, Clerk, Cloudflare Workers, D1
 
 The optional team `division` field uses the shared choices in `shared/divisions.ts`: T-Ball, coach/machine pitch, 6U–18U, league and school levels, college levels, adult leagues, and professional categories. The Team screen uses a snapping wheel beneath the team name. Use Save Team to persist the selection; `null` clears it, while omitted fields preserve the saved division for older clients.
 
-The API workflow applies pending migrations, including `0005_team_division.sql`, before deploying the API. Deploy the API successfully before using the new frontend. No new credentials or repository variables are required.
+The API workflow applies pending migrations, including `0006_b2_team_logos.sql`, before deploying the API. Deploy the API successfully before using the new frontend.
+
+### Enabling B2 logo uploads
+
+After pushing these changes, run **Provision infrastructure** once, then run **Web**. Provisioning automatically creates and installs `B2_LOGO_KEY_ID` and `B2_LOGO_APPLICATION_KEY` as Worker secrets using the existing bootstrap credentials. These separate credentials permit reading, writing, and deleting files only within the Baseball bucket's `team-logos/` prefix; the media-library key remains read-only. No new GitHub secrets need manual entry. Routine API deployments retain the installed Worker secrets.
+
+Existing D1 logos stay readable and migrate on their next successful team save. A failed upload never replaces the saved logo; a failed or conflicting D1 save attempts to remove only its own newly uploaded object. Previously successful objects are retained so existing signed URLs continue working. Old versions and any orphaned uploads whose cleanup failed can be retired separately after verifying the active references; selecting Remove logo clears the team reference without deleting its historical objects.
 
 ## Create a project
 
