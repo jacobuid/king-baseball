@@ -2,7 +2,7 @@ name: API
 on:
   push:
     branches: [main]
-    paths: ['services/api/**', 'infrastructure/pulumi/**', 'scripts/configure-deployment.mjs', 'scripts/teams.test.mjs', 'package.json', 'package-lock.json', '.github/workflows/api.yml']
+    paths: ['shared/**', 'services/api/**', 'infrastructure/pulumi/**', 'scripts/configure-deployment.mjs', 'scripts/teams.test.mjs', 'package.json', 'package-lock.json', '.github/workflows/api.yml']
   workflow_dispatch:
 permissions:
   contents: read

@@ -1,6 +1,8 @@
-type TeamRow = { id: string; name: string; version: number; mutation_id: string; logo_data_url: string | null; created_at: string; updated_at: string }
+import { DIVISIONS } from '../../../shared/divisions.ts'
+
+type TeamRow = { id: string; name: string; version: number; mutation_id: string; logo_data_url: string | null; division: string | null; created_at: string; updated_at: string }
 type PlayerInput = { id: string; name: string; jerseyNumber: string | null }
-type TeamInput = { name: string; version: number; players: PlayerInput[]; logoDataUrl?: string | null }
+type TeamInput = { name: string; version: number; players: PlayerInput[]; logoDataUrl?: string | null; division?: string | null }
 
 const json = (data: unknown, status = 200) => new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' } })
 
@@ -12,6 +14,7 @@ export function validateTeam(body: unknown): TeamInput | string {
   if (!name || name.length > 48) return 'Team name must be 1–48 characters'
   if (!Number.isSafeInteger(input.version) || (input.version as number) < 0) return 'Invalid team version'
   if (!Array.isArray(input.players) || input.players.length < 1 || input.players.length > 100) return 'A team must have 1–100 players'
+  if (input.division !== undefined && input.division !== null && (typeof input.division !== 'string' || !DIVISIONS.includes(input.division))) return 'Choose a valid division'
   if (input.logoDataUrl !== undefined && input.logoDataUrl !== null) {
     if (typeof input.logoDataUrl !== 'string' || input.logoDataUrl.length > 180000 || !/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/]+={0,2}$/.test(input.logoDataUrl)) return 'Choose a PNG, JPG, or WebP team logo'
     const [header, encoded] = input.logoDataUrl.split(',')
@@ -36,12 +39,12 @@ export function validateTeam(body: unknown): TeamInput | string {
     if (jerseyNumber !== null && (typeof jerseyNumber !== 'string' || !/^\d{2}$/.test(jerseyNumber))) return 'Jersey numbers must be two digits from 00 to 99'
     players.push({ id: player.id, name: playerName, jerseyNumber })
   }
-  return { name, version: input.version as number, players, logoDataUrl: input.logoDataUrl as string | null | undefined }
+  return { name, version: input.version as number, players, logoDataUrl: input.logoDataUrl as string | null | undefined, division: input.division as string | null | undefined }
 }
 
 async function readTeam(db: D1Database, userId: string) {
   const result = await db.batch([
-    db.prepare('SELECT id,name,version,logo_data_url AS logoDataUrl,created_at,updated_at FROM teams WHERE owner_user_id = ?').bind(userId),
+    db.prepare('SELECT id,name,version,division,logo_data_url AS logoDataUrl,created_at,updated_at FROM teams WHERE owner_user_id = ?').bind(userId),
     db.prepare('SELECT p.id,p.name,p.jersey_number AS jerseyNumber,p.roster_order AS rosterOrder FROM players p JOIN teams t ON t.id = p.team_id WHERE t.owner_user_id = ? ORDER BY p.roster_order').bind(userId),
   ])
   const team = result[0].results[0]
@@ -72,15 +75,16 @@ export async function handleTeamRequest(request: Request, db: D1Database, userId
   const input = validateTeam(body)
   if (typeof input === 'string') return json({ error: input }, 400)
 
-  const existing = await db.prepare('SELECT id,name,version,mutation_id,logo_data_url FROM teams WHERE owner_user_id = ?').bind(userId).first<TeamRow>()
+  const existing = await db.prepare('SELECT id,name,version,mutation_id,logo_data_url,division FROM teams WHERE owner_user_id = ?').bind(userId).first<TeamRow>()
   if ((!existing && input.version !== 0) || (existing && input.version !== existing.version)) return json({ error: 'This team changed in another session. Reload the saved team before saving again.' }, 409)
   const teamId = existing?.id || crypto.randomUUID()
   const mutationId = crypto.randomUUID()
   const logoDataUrl = input.logoDataUrl === undefined ? existing?.logo_data_url ?? null : input.logoDataUrl
+  const division = input.division === undefined ? existing?.division ?? null : input.division
   const statements = existing ? [
-    db.prepare('UPDATE teams SET name = ?,logo_data_url = ?,version = version + 1,mutation_id = ?,updated_at = CURRENT_TIMESTAMP WHERE id = ? AND owner_user_id = ? AND version = ?').bind(input.name, logoDataUrl, mutationId, teamId, userId, input.version),
+    db.prepare('UPDATE teams SET name = ?,logo_data_url = ?,division = ?,version = version + 1,mutation_id = ?,updated_at = CURRENT_TIMESTAMP WHERE id = ? AND owner_user_id = ? AND version = ?').bind(input.name, logoDataUrl, division, mutationId, teamId, userId, input.version),
   ] : [
-    db.prepare('INSERT INTO teams(id,owner_user_id,name,mutation_id,logo_data_url) VALUES(?,?,?,?,?) ON CONFLICT(owner_user_id) DO NOTHING').bind(teamId, userId, input.name, mutationId, logoDataUrl),
+    db.prepare('INSERT INTO teams(id,owner_user_id,name,mutation_id,logo_data_url,division) VALUES(?,?,?,?,?,?) ON CONFLICT(owner_user_id) DO NOTHING').bind(teamId, userId, input.name, mutationId, logoDataUrl, division),
   ]
   // All roster writes are conditional on this save winning the version check.
   // D1 executes the batch transactionally, including deletions and insertions.
@@ -91,5 +95,5 @@ export async function handleTeamRequest(request: Request, db: D1Database, userId
   const results = await db.batch(statements)
   if (results[0].meta.changes !== 1) return json({ error: 'This team changed in another session. Reload the saved team before saving again.' }, 409)
   // Return this mutation's result, rather than a separate read which could race a later save.
-  return json({ team: { id: teamId, name: input.name, logoDataUrl, version: input.version + 1, players: input.players.map((player, rosterOrder) => ({ ...player, rosterOrder })) } }, existing ? 200 : 201)
+  return json({ team: { id: teamId, name: input.name, logoDataUrl, division, version: input.version + 1, players: input.players.map((player, rosterOrder) => ({ ...player, rosterOrder })) } }, existing ? 200 : 201)
 }

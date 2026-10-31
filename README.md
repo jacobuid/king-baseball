@@ -12,7 +12,9 @@ Baseball application foundation using React, Vite, Clerk, Cloudflare Workers, D1
 - Team names allow 1–48 characters and player names 1–55. Each roster requires 1–100 players; duplicate IDs or normalized names are rejected. Stale saves return `409` without changing the roster.
 - Existing IndexedDB rosters load as drafts only when the account has no server team. Save Team uploads names and roster order, excluding music. A failed server load blocks saving until Retry succeeds, preventing accidental replacement of existing data.
 
-The API workflow applies `0002_teams.sql` before deploying the API. Deploy the API successfully before using the new frontend. No new credentials or repository variables are required.
+The optional team `division` field uses the shared choices in `shared/divisions.ts`: T-Ball, coach/machine pitch, 6U–18U, league and school levels, college levels, adult leagues, and professional categories. The Team screen uses a snapping wheel beneath the team name. Use Save Team to persist the selection; `null` clears it, while omitted fields preserve the saved division for older clients.
+
+The API workflow applies pending migrations, including `0005_team_division.sql`, before deploying the API. Deploy the API successfully before using the new frontend. No new credentials or repository variables are required.
 
 ## Create a project
 

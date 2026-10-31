@@ -2,7 +2,7 @@ name: Web
 on:
   push:
     branches: [main]
-    paths: ['apps/web/**', 'scripts/resolve-api-url.mjs', 'package.json', 'package-lock.json', '.github/workflows/web.yml']
+    paths: ['shared/**', 'apps/web/**', 'scripts/resolve-api-url.mjs', 'package.json', 'package-lock.json', '.github/workflows/web.yml']
   workflow_dispatch:
 permissions:
   contents: read

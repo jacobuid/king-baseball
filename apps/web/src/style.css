@@ -53,3 +53,6 @@
 
 .player .remove-btn{color:#c43d3d}
 .player .remove-btn:hover{color:#a52525}
+.division-button{display:flex;align-items:center;gap:8px;width:100%;min-height:38px;padding:7px 10px;margin-top:10px;border-radius:10px;font-size:11px;font-weight:700;text-align:left}.division-button span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.division-button svg{flex:none}.division-sheet .jersey-wheel-frame{max-width:300px}.division-sheet .jersey-option{font-size:17px;letter-spacing:0;font-weight:650;padding:0 32px;text-align:center}.division-sheet .jersey-option.selected{transform:scale(1.08);font-weight:850}.division-sheet .jersey-selection{padding:0 10px}.division-sheet .jersey-confirm{font-size:14px}.team-identity-row .team-logo-upload{min-height:100px}.team-identity-row .team-logo-upload img{height:74px}
+
+.jersey-sheet .jersey-save-error{padding:10px 12px;border:1px solid #ed8d7a66;border-radius:9px;background:#b833331a;color:#ffc5b8;font-size:12px;line-height:1.5;text-align:center;margin:10px 0}

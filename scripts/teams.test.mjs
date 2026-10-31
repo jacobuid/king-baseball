@@ -2,7 +2,8 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { DatabaseSync } from 'node:sqlite'
 import { readFileSync } from 'node:fs'
-import { handleTeamRequest } from '../services/api/src/teams.ts'
+import { DIVISIONS } from '../shared/divisions.ts'
+import { handleTeamRequest, validateTeam } from '../services/api/src/teams.ts'
 
 // Exercise the real SQL against SQLite, matching D1's prepared statements and atomic batch behavior.
 class Database {
@@ -13,6 +14,7 @@ class Database {
     this.sqlite.exec(readFileSync(new URL('../services/api/migrations/0002_teams.sql', import.meta.url), 'utf8'))
     this.sqlite.exec(readFileSync(new URL('../services/api/migrations/0003_player_jersey_numbers.sql', import.meta.url), 'utf8'))
     this.sqlite.exec(readFileSync(new URL('../services/api/migrations/0004_team_logos.sql', import.meta.url), 'utf8'))
+    this.sqlite.exec(readFileSync(new URL('../services/api/migrations/0005_team_division.sql', import.meta.url), 'utf8'))
   }
   prepare(sql) {
     const db = this.sqlite
@@ -149,4 +151,22 @@ test('team logo saves, reloads, survives older clients, and can be removed', () 
   assert.equal((await handleTeamRequest(request({ ...team(2), logoDataUrl: null }), db, 'alice')).status, 200)
   saved = (await (await handleTeamRequest(request(), db, 'alice')).json()).team
   assert.equal(saved.logoDataUrl, null)
+}))
+
+test('all division choices validate and division persists, updates, and clears', () => withDb(async db => {
+  for (const division of DIVISIONS) assert.equal(validateTeam({ ...team(), division }).division, division)
+  assert.equal((await handleTeamRequest(request({ ...team(), division: 'T-Ball' }), db, 'alice')).status, 201)
+  let saved = (await (await handleTeamRequest(request(), db, 'alice')).json()).team
+  assert.equal(saved.division, 'T-Ball')
+  assert.equal((await handleTeamRequest(request(team(1)), db, 'alice')).status, 200)
+  saved = (await (await handleTeamRequest(request(), db, 'alice')).json()).team
+  assert.equal(saved.division, 'T-Ball')
+  assert.equal((await handleTeamRequest(request({ ...team(2), division: 'Junior Varsity' }), db, 'alice')).status, 200)
+  assert.equal((await handleTeamRequest(request({ ...team(3), division: 'Invalid Division' }), db, 'alice')).status, 400)
+  assert.equal((await handleTeamRequest(request({ ...team(3), division: 12 }), db, 'alice')).status, 400)
+  saved = (await (await handleTeamRequest(request(), db, 'alice')).json()).team
+  assert.equal(saved.division, 'Junior Varsity')
+  assert.equal((await handleTeamRequest(request({ ...team(3), division: null }), db, 'alice')).status, 200)
+  saved = (await (await handleTeamRequest(request(), db, 'alice')).json()).team
+  assert.equal(saved.division, null)
 }))
