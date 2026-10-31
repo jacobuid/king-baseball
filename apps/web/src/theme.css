@@ -3,6 +3,8 @@
   --theme-blue-dark: #041c36;
   --theme-blue-light: #123c67;
   --theme-yellow: #ffb65f;
+  --button-primary-background: var(--theme-blue-light);
+  --button-primary-hover: #194d7e;
   --button-secondary-background: #eaf3ff;
   --button-secondary-border: #c7ddf6;
   --button-secondary-text: #1d67bc;
@@ -18,11 +20,11 @@
 }
 
 .button-primary {
-  background: var(--theme-blue-dark);
+  background: var(--button-primary-background);
   color: #fff;
   border: 0;
 }
-.button-primary:hover:not(:disabled) { background: var(--theme-blue-light); }
+.button-primary:hover:not(:disabled) { background: var(--button-primary-hover); }
 
 /* Keep the existing Add music appearance as the secondary button style. */
 .button-secondary {
