@@ -1,0 +1,78 @@
+import React, { useEffect, useMemo, useRef, useState } from 'react'
+import { useAuth } from '@clerk/clerk-react'
+import { Icon } from './ui'
+import { createTeamApi } from './teamApi'
+import { teamStorage } from './teamStorage'
+
+export function TeamView({ userId, onEdit }) {
+  const { getToken } = useAuth()
+  const requestTeam = useMemo(() => createTeamApi(getToken), [getToken])
+  const [team, setTeam] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [retry, setRetry] = useState(0)
+  const [activeId, setActiveId] = useState(null)
+  const [playing, setPlaying] = useState(false)
+  const audio = useRef(null)
+  const queue = useRef([])
+  useEffect(() => {
+    let active = true
+    setLoading(true)
+    setError('')
+    requestTeam().then(async saved => {
+      const local = await teamStorage(userId).catch(() => null)
+      if (active) setTeam(saved ? { ...saved, players: saved.players.map(player => ({ ...player, song: local?.players?.find(p => p.id === player.id)?.song || null })) } : null)
+    }).catch(error => { if (active) setError(error.message || 'Could not load your team.') }).finally(() => { if (active) setLoading(false) })
+    return () => { active = false }
+  }, [requestTeam, userId, retry])
+
+  const activeFile = team?.players.find(player => player.id === activeId)?.song?.file
+  useEffect(() => {
+    if (!activeFile || !audio.current) return
+    let disposed = false
+    const element = audio.current
+    const url = URL.createObjectURL(activeFile)
+    element.src = url
+    element.play().catch(() => { if (!disposed) { setError('Audio could not play. Try another file in Edit Team.'); setActiveId(null) } })
+    return () => { disposed = true; element.pause(); element.removeAttribute('src'); element.load(); URL.revokeObjectURL(url) }
+  }, [activeFile, activeId])
+
+  function playPlayer(id) {
+    queue.current = []
+    setError('')
+    setActiveId(current => current === id ? null : id)
+  }
+  function playlist() {
+    const ids = team.players.filter(player => player.song?.file instanceof Blob).map(player => player.id)
+    queue.current = ids.slice(1)
+    setError('')
+    setActiveId(ids[0] || null)
+  }
+  const playable = team?.players.some(player => player.song?.file instanceof Blob)
+  return <main className="team-view">
+    <audio ref={audio} onPlaying={() => setPlaying(true)} onPause={() => setPlaying(false)} onEnded={() => setActiveId(queue.current.shift() || null)} onError={() => { setError('This audio file could not be played.'); setActiveId(null) }} />
+    {loading ? <div className="view-empty" role="status"><Icon name="ball" size={42} /><h2>Loading your lineup...</h2></div> : <>
+      {error && <div className="view-error" role="alert"><p>{error}</p>{!team && <button className="view-retry" onClick={() => setRetry(value => value + 1)}>Try again</button>}</div>}
+      {!team ? !error && <div className="view-empty"><Icon name="team" size={46} /><h2>Your team starts here.</h2><p>Create your team and build your first lineup.</p><button className="view-edit" onClick={onEdit}>Create Team <Icon name="plus" size={18} /></button></div> : <>
+        <section className="team-summary" aria-label="Team details">
+          <img className="summary-background" src={`${import.meta.env.BASE_URL}hero-background.png`} alt="" />
+          <div className="view-team-logo">{team.logoUrl || team.logoDataUrl ? <img src={team.logoUrl || team.logoDataUrl} alt={`${team.name} logo`} /> : <Icon name="team" size={48} />}</div>
+          <div className="team-summary-copy"><p>TEAM</p><h2>{team.name}</h2>{team.division && <span className="view-division"><Icon name="league" size={17} />{team.division}</span>}</div>
+        </section>
+        <div className="view-roster-heading"><div><h2>Players</h2><p>Tap play for their walk-up music.</p></div><span className="view-player-count">{team.players.length} {team.players.length === 1 ? 'PLAYER' : 'PLAYERS'}</span></div>
+        <div className="view-roster">{team.players.map(player => {
+          const available = player.song?.file instanceof Blob
+          const isPlaying = activeId === player.id && playing
+          return <article key={player.id} className={`view-player ${isPlaying ? 'playing' : ''}`}>
+            <div className="view-jersey"><Icon name="jersey" size={46} /><span>{player.jerseyNumber ?? '--'}</span></div>
+            <div className="view-player-info"><h3>{player.name}</h3><p><Icon name="music" size={14} />{available ? 'Walk-up music assigned' : player.song ? 'Add audio in Edit Team' : 'No walk-up music yet'}</p></div>
+            {isPlaying && <div className="view-wave" aria-hidden="true">{[10, 20, 30, 16, 26].map((height, index) => <span key={index} style={{ height, animationDelay: `${index * .12}s` }} />)}</div>}
+            <button className="view-play" disabled={!available} aria-label={`${isPlaying ? 'Stop' : 'Play'} walk-up music for ${player.name}`} aria-pressed={activeId === player.id} onClick={() => playPlayer(player.id)}><Icon name={isPlaying ? 'stop' : 'play'} size={19} /></button>
+          </article>
+        })}</div>
+        <button className="view-playlist" disabled={!playable} onClick={playlist}><span className="view-playlist-icon"><Icon name="playlist" size={27} /></span><span><strong>Team Playlist</strong><small>{playable ? "Play your team's lineup in order." : 'Add player audio in Edit Team to play your lineup.'}</small></span><Icon name="chevronRight" size={17} /></button>
+        <button className="view-edit" onClick={onEdit}>Edit Team <Icon name="arrowRight" size={20} /></button>
+      </>}
+    </>}
+  </main>
+}

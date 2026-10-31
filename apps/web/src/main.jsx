@@ -1,7 +1,8 @@
-import React from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { ClerkProvider, ClerkLoaded, SignedIn, SignedOut, SignInButton, UserButton, useUser } from '@clerk/clerk-react'
-import { TeamPage } from './TeamPage'
+import { TeamEdit } from './TeamEdit'
+import { TeamView } from './TeamView'
 import { Icon } from './ui'
 import { AppLoadingProvider, StartupReady, useAppLoading } from './LoadingScreen'
 import './style.css'
@@ -26,8 +27,50 @@ function Header({ account }) {
 function App() {
   const { user } = useUser()
   const { navigate } = useAppLoading()
+  const getRoute = () => window.location.hash === '#/team/edit' ? 'edit' : 'view'
+  const [route, setRoute] = useState(getRoute)
+  const routeRef = useRef(route)
+  const dirty = useRef(false)
+  const saving = useRef(false)
+  const onDirtyChange = useCallback(value => { dirty.current = value }, [])
+  const onSavingChange = useCallback(value => { saving.current = value }, [])
+  function canLeave() {
+    if (saving.current) { window.alert('Your team is saving. Please wait.'); return false }
+    return !dirty.current || window.confirm('Leave without saving your team changes?')
+  }
+  useEffect(() => {
+    const change = () => {
+      const next = getRoute()
+      if (next !== routeRef.current && !canLeave()) {
+        window.history.replaceState(null, '', routeRef.current === 'edit' ? '#/team/edit' : '#/team')
+        return
+      }
+      routeRef.current = next
+      setRoute(next)
+    }
+    window.addEventListener('hashchange', change)
+    return () => window.removeEventListener('hashchange', change)
+  }, [])
+  function go(href) {
+    const next = href === '#/team/edit' ? 'edit' : 'view'
+    if (next !== routeRef.current && !canLeave()) return
+    // The route listener must not ask twice after a confirmed departure.
+    if (next !== routeRef.current) dirty.current = false
+    navigate(href)
+  }
   if (!user) return null
-  return <div className="app"><Header account={<UserButton />} /><TeamPage key={user.id} userId={user.id} /><nav className="bottom-nav" aria-label="Main menu" onClick={event => { const link = event.target.closest("a[href]"); if (!link || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return; const href = link.getAttribute("href"); if (!href.startsWith("#/")) return; event.preventDefault(); navigate(href) }}><a className="nav-item active" href="#/team" aria-current="page"><Icon /><span>Team</span></a></nav></div>
+  return <div className={`app ${route === 'view' ? 'team-view-app' : ''}`}>
+    <Header account={<UserButton />} />
+    {route === 'edit' ? <TeamEdit key={`edit-${user.id}`} userId={user.id} onDirtyChange={onDirtyChange} onSavingChange={onSavingChange} onSaved={() => go('#/team')} /> : <TeamView key={`view-${user.id}`} userId={user.id} onEdit={() => go('#/team/edit')} />}
+    <nav className="bottom-nav" aria-label="Main menu" onClick={event => {
+      const link = event.target.closest('a[href]')
+      if (!link || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
+      const href = link.getAttribute('href')
+      if (!href.startsWith('#/')) return
+      event.preventDefault()
+      go(href)
+    }}><a className="nav-item active" href="#/team" aria-current="page"><Icon /><span>Team</span></a></nav>
+  </div>
 }
 function Welcome() {
   return <div className="app welcome">
