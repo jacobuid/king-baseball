@@ -276,3 +276,16 @@ test('team theme handles extreme colors and rejects invalid CSS input', () => {
   }
   assert.equal(createTeamTheme('invalid')['--team-color'], '#16845b')
 })
+
+test('primary color migration preserves a populated existing team table', () => {
+  const db = new DatabaseSync(':memory:')
+  try {
+    for (const migration of ['0001_initial.sql', '0002_teams.sql', '0003_player_jersey_numbers.sql', '0004_team_logos.sql', '0005_team_division.sql', '0006_b2_team_logos.sql']) db.exec(readFileSync(new URL('../services/api/migrations/' + migration, import.meta.url), 'utf8'))
+    db.prepare('INSERT INTO teams(id,owner_user_id,name,mutation_id) VALUES(?,?,?,?)').run('existing-team', 'existing-user', 'Existing Team', 'original-mutation')
+    db.exec(readFileSync(new URL('../services/api/migrations/0007_team_primary_color.sql', import.meta.url), 'utf8'))
+    const row = db.prepare('SELECT name,primary_color,version FROM teams').get()
+    assert.equal(row.name, 'Existing Team')
+    assert.equal(row.primary_color, '#16845b')
+    assert.equal(row.version, 1)
+  } finally { db.close() }
+})
