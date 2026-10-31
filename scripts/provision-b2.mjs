@@ -25,10 +25,10 @@ async function api(operation, body) {
 const listed = await api('b2_list_buckets', { accountId: auth.accountId, bucketName })
 let bucket = listed.buckets?.find(item => item.bucketName === bucketName)
 const corsRules = [{
-  corsRuleName: 'kingVideosWebPlayback',
+  corsRuleName: 'kingBaseballWebPlayback',
   allowedOrigins: [webOrigin],
   allowedHeaders: ['range'],
-  allowedOperations: ['b2_download_file_by_id', 'b2_download_file_by_name'],
+  allowedOperations: ['b2_download_file_by_id', 'b2_download_file_by_name', 's3_get', 's3_head'],
   exposeHeaders: ['content-length', 'content-range', 'content-type'],
   maxAgeSeconds: 3600,
 }]
@@ -53,7 +53,6 @@ if (!bucket) {
 }
 
 const keyPrefix = process.env.B2_KEY_PREFIX || 'media-worker-'
-const keyPrefix = process.env.B2_KEY_PREFIX || 'media-worker-'
 const runtimeKey = await api('b2_create_key', {
   accountId: auth.accountId,
   keyName: `${keyPrefix}${Date.now()}`,
@@ -61,15 +60,12 @@ const runtimeKey = await api('b2_create_key', {
   bucketIds: [bucket.bucketId],
 })
 
-const keys = await api('b2_list_keys', { accountId: auth.accountId, maxKeyCount: 10000 })
-for (const key of keys.keys || []) {
-  if (key.keyName?.startsWith(keyPrefix) && key.applicationKeyId !== runtimeKey.applicationKeyId) {
-    await api('b2_delete_key', { applicationKeyId: key.applicationKeyId })
-  }
-}
+// Keep existing keys working until the new Worker secrets have been installed.
+// Old keys can be retired after a successful deployment has been verified.
 
 const output = process.env.GITHUB_OUTPUT
 if (!output) throw new Error('GITHUB_OUTPUT is unavailable')
+console.log(`::add-mask::${runtimeKey.applicationKey}`)
 appendFileSync(output, `key_id=${runtimeKey.applicationKeyId}\n`)
 appendFileSync(output, `application_key=${runtimeKey.applicationKey}\n`)
 appendFileSync(output, `endpoint=${storage.s3ApiUrl}\n`)

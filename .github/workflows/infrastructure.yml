@@ -3,6 +3,9 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: baseball-api
+  cancel-in-progress: false
 jobs:
   provision:
     runs-on: ubuntu-latest

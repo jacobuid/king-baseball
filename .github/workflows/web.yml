@@ -2,12 +2,15 @@ name: Web
 on:
   push:
     branches: [main]
-    paths: ['apps/web/**', 'package.json', 'package-lock.json', '.github/workflows/web.yml']
+    paths: ['apps/web/**', 'scripts/resolve-api-url.mjs', 'package.json', 'package-lock.json', '.github/workflows/web.yml']
   workflow_dispatch:
 permissions:
   contents: read
   pages: write
   id-token: write
+concurrency:
+  group: baseball-web
+  cancel-in-progress: false
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -19,11 +22,15 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Resolve API URL
+        run: node scripts/resolve-api-url.mjs
+        env:
+          VITE_API_URL: ${{ vars.VITE_API_URL }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       - run: npm run build
         env:
           VITE_CLERK_PUBLISHABLE_KEY: ${{ vars.VITE_CLERK_PUBLISHABLE_KEY }}
-          VITE_API_URL: ${{ vars.VITE_API_URL }}
-          VITE_BASE_PATH: /${{ github.event.repository.name }}/
           VITE_BASE_PATH: /${{ github.event.repository.name }}/
       - uses: actions/upload-pages-artifact@v3
         with:
