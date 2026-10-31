@@ -3,6 +3,7 @@ import { useAuth } from '@clerk/clerk-react'
 import { Icon } from './ui'
 import { createTeamApi } from './teamApi'
 import { teamStorage } from './teamStorage'
+import { createTeamTheme } from './teamTheme'
 
 export function TeamView({ userId, onEdit }) {
   const { getToken } = useAuth()
@@ -49,7 +50,7 @@ export function TeamView({ userId, onEdit }) {
     setActiveId(ids[0] || null)
   }
   const playable = team?.players.some(player => player.song?.file instanceof Blob)
-  return <main className="team-view">
+  return <main className="team-view" style={createTeamTheme(team?.primaryColor)}>
     <audio ref={audio} onPlaying={() => setPlaying(true)} onPause={() => setPlaying(false)} onEnded={() => setActiveId(queue.current.shift() || null)} onError={() => { setError('This audio file could not be played.'); setActiveId(null) }} />
     {loading ? <div className="view-empty" role="status"><Icon name="ball" size={42} /><h2>Loading your lineup...</h2></div> : <>
       {error && <div className="view-error" role="alert"><p>{error}</p>{!team && <button className="view-retry" onClick={() => setRetry(value => value + 1)}>Try again</button>}</div>}

@@ -1,3 +1,4 @@
+import { createTeamTheme } from '../apps/web/src/teamTheme.js'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { DatabaseSync } from 'node:sqlite'
@@ -17,6 +18,7 @@ class Database {
     this.sqlite.exec(readFileSync(new URL('../services/api/migrations/0004_team_logos.sql', import.meta.url), 'utf8'))
     this.sqlite.exec(readFileSync(new URL('../services/api/migrations/0005_team_division.sql', import.meta.url), 'utf8'))
     this.sqlite.exec(readFileSync(new URL('../services/api/migrations/0006_b2_team_logos.sql', import.meta.url), 'utf8'))
+    this.sqlite.exec(readFileSync(new URL('../services/api/migrations/0007_team_primary_color.sql', import.meta.url), 'utf8'))
     this.objects = new Map()
     this.storage = { put: async (key, data) => { if (this.failUploads) throw new Error('B2 unavailable'); this.objects.set(key, data) }, url: async key => 'https://private-b2.example/' + key + '?signed=true', remove: async key => { this.objects.delete(key) } }
   }
@@ -247,4 +249,30 @@ test('B2 adapter signs private URLs and uploads image bytes, not base64 text', a
   await storage.remove(key)
   assert.equal(calls[1].method, 'DELETE')
   await assert.rejects(storage.url('movies/other.png'))
+})
+
+test('team primary color saves, reloads, updates, and survives older clients', () => withDb(async db => {
+  assert.equal((await handleTeamRequest(request({ ...team(), primaryColor: '#AB1234' }), db, 'alice')).status, 201)
+  let saved = (await (await handleTeamRequest(request(), db, 'alice')).json()).team
+  assert.equal(saved.primaryColor, '#ab1234')
+  assert.equal((await handleTeamRequest(request(team(1)), db, 'alice')).status, 200)
+  saved = (await (await handleTeamRequest(request(), db, 'alice')).json()).team
+  assert.equal(saved.primaryColor, '#ab1234')
+  for (const invalid of ['red', '#fff', '#12345678', 'var(--color)', null, 123]) {
+    assert.equal((await handleTeamRequest(request({ ...team(2), primaryColor: invalid }), db, 'alice')).status, 400)
+  }
+  assert.equal((await handleTeamRequest(request({ ...team(2), primaryColor: '#000000' }), db, 'alice')).status, 200)
+  assert.equal((await (await handleTeamRequest(request(), db, 'alice')).json()).team.primaryColor, '#000000')
+  await handleTeamRequest(request(team()), db, 'bob')
+  assert.equal((await (await handleTeamRequest(request(), db, 'bob')).json()).team.primaryColor, '#16845b')
+}))
+test('team theme handles extreme colors and rejects invalid CSS input', () => {
+  for (const color of ['#000000', '#ffffff', '#ff0000']) {
+    const theme = createTeamTheme(color)
+    assert.equal(theme['--team-color'], color)
+    assert.notEqual(theme['--team-panel'], '#ffffff')
+    assert.notEqual(theme['--team-accent'], '#000000')
+    for (const value of Object.values(theme)) assert.match(value, /^#[a-f0-9]{6}([a-f0-9]{2})?$/)
+  }
+  assert.equal(createTeamTheme('invalid')['--team-color'], '#16845b')
 })
