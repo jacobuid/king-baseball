@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { Modal } from './ui'
+import { Icon, Modal } from './ui'
 
 const ROW_HEIGHT = 56
 const numbers = Array.from({ length: 100 }, (_, number) => String(number).padStart(2, '0'))
