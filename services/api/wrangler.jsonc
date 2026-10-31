@@ -1,0 +1,17 @@
+{
+  "name": "media-api",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-01-01",
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "media-prod",
+      "database_id": "REPLACE_WITH_D1_DATABASE_ID",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "vars": {
+    "WEB_ORIGIN": "https://example.github.io",
+    "B2_BUCKET": "replace-with-generated-bucket"
+  }
+}

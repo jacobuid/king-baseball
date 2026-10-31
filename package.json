@@ -1,0 +1,11 @@
+{
+  "name": "king-bootstrap",
+  "private": true,
+  "workspaces": ["apps/web", "services/api", "infrastructure/pulumi"],
+  "scripts": {
+    "build": "npm run build -w apps/web",
+    "dev:web": "npm run dev -w apps/web",
+    "dev:api": "npm run dev -w services/api",
+    "check": "npm run build && npm run check -w services/api"
+  }
+}
