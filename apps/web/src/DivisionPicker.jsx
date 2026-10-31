@@ -39,7 +39,7 @@ export function DivisionPicker({ value, onSave, onClose }) {
       if (index >= 0 || fallback >= 0) moveTo(index >= 0 ? index : fallback)
     }
   }
-  return <Modal title="Pick your division" iconName="team" className="jersey-sheet division-sheet" onClose={onClose}>
+  return <Modal title="Pick your division" iconName="league" className="jersey-sheet division-sheet" onClose={onClose}>
     <p className="jersey-player">Find your team's level<span>TEAM DIVISION</span></p>
     <div className="jersey-wheel-frame">
       <div className="jersey-selection" aria-hidden="true"><Icon name="chevronRight" size={15} /><Icon name="chevronLeft" size={15} /></div>
