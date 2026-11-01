@@ -5,6 +5,7 @@ import { createTeamApi } from './teamApi'
 import { teamStorage } from './teamStorage'
 import { createTeamTheme } from './teamTheme'
 import { createMusicApi, mergeMusic } from './musicApi'
+import './team-playlist.css'
 
 export function TeamView({ userId, onEdit }) {
   const { getToken } = useAuth()
@@ -16,6 +17,9 @@ export function TeamView({ userId, onEdit }) {
   const [retry, setRetry] = useState(0)
   const [activeId, setActiveId] = useState(null)
   const [playing, setPlaying] = useState(false)
+  const [playlistMode, setPlaylistMode] = useState(false)
+  const [playlistOpen, setPlaylistOpen] = useState(false)
+  const [shuffle, setShuffle] = useState(false)
   const audio = useRef(null)
   const queue = useRef([])
   useEffect(() => {
@@ -48,8 +52,8 @@ export function TeamView({ userId, onEdit }) {
         element.src = url
         await element.play()
       } catch (error) { if (!disposed) {
-        if (error.name === 'NotAllowedError') setError('Tap play in the audio controls to start playback.')
-        else { queue.current = []; setError('Audio could not play. Tap play to try again.'); setActiveId(null) }
+        if (error.name === 'NotAllowedError') setError('Tap the play button again to start playback.')
+        else { queue.current = []; setPlaylistMode(false); setError('Audio could not play. Tap play to try again.'); setActiveId(null) }
       } }
     }
     play()
@@ -57,19 +61,56 @@ export function TeamView({ userId, onEdit }) {
   }, [activeSong, requestMusic])
   function playPlayer(id) {
     queue.current = []
+    setPlaylistMode(false)
     setError('')
-    setActiveId(current => current === id ? null : id)
+    if (activeId === id) {
+      if (audio.current?.paused) audio.current.play().catch(() => setError('Audio could not play. Tap play to try again.'))
+      else audio.current?.pause()
+      return
+    }
+    setActiveId(id)
   }
   function playlist() {
-    if (activeId?.startsWith('team-')) { queue.current = []; setActiveId(null); return }
-    const ids = (team.teamSongs || []).filter(song => song.status === 'ready').map(song => 'team-' + song.id)
+    if (playlistMode && activeId?.startsWith('team-')) {
+      if (audio.current?.paused) audio.current.play().catch(() => setError('Audio could not play. Tap play to try again.'))
+      else audio.current?.pause()
+      return
+    }
+    let ids = (team.teamSongs || []).filter(song => song.status === 'ready').map(song => 'team-' + song.id)
+    if (shuffle) {
+      ids = [...ids]
+      for (let index = ids.length - 1; index > 0; index--) {
+        const swap = Math.floor(Math.random() * (index + 1))
+        ;[ids[index], ids[swap]] = [ids[swap], ids[index]]
+      }
+    }
     queue.current = ids.slice(1)
+    setPlaylistMode(true)
     setError('')
     setActiveId(ids[0] || null)
   }
+  function playTeamSong(id) {
+    queue.current = []
+    setPlaylistMode(false)
+    setError('')
+    const playbackId = 'team-' + id
+    if (activeId === playbackId) {
+      if (audio.current?.paused) audio.current.play().catch(() => setError('Audio could not play. Tap play to try again.'))
+      else audio.current?.pause()
+      return
+    }
+    setActiveId(playbackId)
+  }
+  function nextSong() {
+    const next = queue.current.shift() || null
+    if (!next) setPlaylistMode(false)
+    setActiveId(next)
+  }
   const playable = team?.teamSongs?.some(song => song.status === 'ready')
+  const teamSongs = (team?.teamSongs || []).filter(song => song.status === 'ready')
+  const playlistIsActive = playlistMode && activeId?.startsWith('team-')
   return <main className="team-view" style={createTeamTheme(team?.primaryColor)}>
-    <audio ref={audio} controls={!!activeId} hidden={!activeId} style={{ width: '100%', marginBottom: activeId ? 16 : 0 }} onPlaying={() => { setPlaying(true); setError('') }} onPause={() => setPlaying(false)} onEnded={() => setActiveId(queue.current.shift() || null)} onError={() => { queue.current = []; setError('This song could not be played. Tap play to retry.'); setActiveId(null) }} />
+    <audio ref={audio} hidden onPlaying={() => { setPlaying(true); setError('') }} onPause={() => setPlaying(false)} onEnded={nextSong} onError={() => { queue.current = []; setPlaylistMode(false); setError('This song could not be played. Tap play to retry.'); setActiveId(null) }} />
     {loading ? <div className="view-empty" role="status"><Icon name="ball" size={42} /><h2>Loading your lineup...</h2></div> : <>
       {error && <div className="view-error" role="alert"><p>{error}</p>{!team && <button className="view-retry" onClick={() => setRetry(value => value + 1)}>Try again</button>}</div>}
       {!team ? !error && <div className="view-empty"><Icon name="team" size={46} /><h2>Your team starts here.</h2><p>Create your team and build your first lineup.</p><button className="view-edit" onClick={onEdit}>Create Team <Icon name="plus" size={18} /></button></div> : <>
@@ -86,10 +127,21 @@ export function TeamView({ userId, onEdit }) {
             <div className="view-jersey"><Icon name="jersey" size={46} /><span>{player.jerseyNumber ?? '--'}</span></div>
             <div className="view-player-info"><h3>{player.name}</h3><p><Icon name="music" size={14} />{available ? 'Walk-up music assigned' : player.song ? 'Add audio in Edit Team' : 'No walk-up music yet'}</p></div>
             {isPlaying && <div className="view-wave" aria-hidden="true">{[10, 20, 30, 16, 26].map((height, index) => <span key={index} style={{ height, animationDelay: `${index * .12}s` }} />)}</div>}
-            <button className="view-play" disabled={!available} aria-label={`${isPlaying ? 'Stop' : 'Play'} walk-up music for ${player.name}`} aria-pressed={activeId === player.id} onClick={() => playPlayer(player.id)}><Icon name={isPlaying ? 'stop' : 'play'} size={19} /></button>
+            <button className="view-play" disabled={!available} aria-label={`${isPlaying ? 'Pause' : 'Play'} walk-up music for ${player.name}`} aria-pressed={activeId === player.id && playing} onClick={() => playPlayer(player.id)}><Icon name={isPlaying ? 'pause' : 'play'} size={19} /></button>
           </article>
         })}</div>
-        <button className="view-playlist" disabled={!playable} onClick={playlist}><span className="view-playlist-icon"><Icon name="playlist" size={27} /></span><span><strong>{activeId?.startsWith('team-') ? 'Stop Team Playlist' : 'Team Playlist'}</strong><small>{playable ? 'Play your team songs in order, in full.' : 'No team songs yet. Edit this team to add songs for pregame, postgame, and transitions.'}</small></span></button>
+        <section className={`view-playlist-panel${playlistOpen ? ' open' : ''}`} aria-label="Team playlist">
+          <div className="view-playlist-toolbar">
+            <button className="view-playlist" disabled={!playable} onClick={playlist}><span className="view-playlist-icon"><Icon name={playlistIsActive && playing ? 'pause' : 'playlist'} size={25} /></span><span><strong>{playlistIsActive ? playing ? 'Pause Team Playlist' : 'Resume Team Playlist' : 'Play Team Playlist'}</strong><small>{playable ? `${teamSongs.length} ${teamSongs.length === 1 ? 'song' : 'songs'} · ${shuffle ? 'Shuffle play' : 'Play in order'}` : 'No team songs yet. Edit this team to add songs.'}</small></span></button>
+            <button className={`view-playlist-tool${shuffle ? ' active' : ''}`} disabled={!playable} aria-label={`${shuffle ? 'Turn off' : 'Turn on'} shuffle`} aria-pressed={shuffle} onClick={() => setShuffle(value => !value)}><Icon name="shuffle" size={17} /></button>
+            <button className="view-playlist-tool playlist-expand" disabled={!playable} aria-label={`${playlistOpen ? 'Hide' : 'Show'} team songs`} aria-expanded={playlistOpen} onClick={() => setPlaylistOpen(value => !value)}><Icon name="chevronDown" size={16} /></button>
+          </div>
+          {playlistOpen && <div className="view-playlist-songs">{teamSongs.map((song, index) => {
+            const songActive = activeId === 'team-' + song.id
+            const songPlaying = songActive && playing
+            return <article className={`view-playlist-song${songActive ? ' active' : ''}`} key={song.id}><span className="playlist-track-number">{index + 1}</span><span><strong>{song.title}</strong><small>{song.artist || 'Team song'}{song.duration ? ` · ${Math.floor(song.duration / 60)}:${String(Math.floor(song.duration % 60)).padStart(2, '0')}` : ''}</small></span><button className="view-play" aria-label={`${songPlaying ? 'Pause' : 'Play'} ${song.title}`} aria-pressed={songPlaying} onClick={() => playTeamSong(song.id)}><Icon name={songPlaying ? 'pause' : 'play'} size={15} /></button></article>
+          })}</div>}
+        </section>
         <button className="view-edit" onClick={onEdit}>Edit Team <Icon name="arrowRight" size={20} /></button>
       </>}
     </>}
