@@ -64,7 +64,7 @@ function App() {
   if (!user) return null
   return <div className={`app ${route === 'view' ? 'team-view-app' : ''}`}>
     <Header account={<UserButton />} />
-    {route === 'edit' ? <TeamEdit key={`edit-${user.id}`} userId={user.id} onDirtyChange={onDirtyChange} onSavingChange={onSavingChange} onSaved={() => go('#/team')} /> : <TeamView key={`view-${user.id}`} userId={user.id} onEdit={() => go('#/team/edit')} />}
+    {route === 'edit' ? <TeamEdit key={`edit-${user.id}`} userId={user.id} onDirtyChange={onDirtyChange} onSavingChange={onSavingChange} onSaved={() => go('#/team')} onCancel={() => go('#/team')} /> : <TeamView key={`view-${user.id}`} userId={user.id} onEdit={() => go('#/team/edit')} />}
     <nav className="bottom-nav" aria-label="Main menu" onClick={event => {
       const link = event.target.closest('a[href]')
       if (!link || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
