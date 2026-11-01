@@ -380,7 +380,7 @@
 .walkup-timeline-row { display: grid; grid-template-columns: 74px 1fr; align-items: center; gap: 8px; min-height: 48px; }
 .walkup-timeline-label { display: flex; align-items: center; gap: 5px; color: #4f6881; font-size: 11px; font-weight: 800; }
 .walkup-timeline-lane { position: relative; height: 34px; overflow: hidden; border-radius: 8px; background: repeating-linear-gradient(90deg,#edf3f9 0,#edf3f9 calc(25% - 1px),#d9e5ef calc(25% - 1px),#d9e5ef 25%); }
-.walkup-timeline-clip { position: absolute; top: 3px; bottom: 3px; display: flex; align-items: center; justify-content: space-between; gap: 4px; min-width: 42px; padding: 0 7px; overflow: hidden; touch-action: none; border: 0; border-radius: 7px; color: #fff; cursor: grab; box-shadow: 0 3px 8px #09233d35; user-select: none; }
+.walkup-timeline-clip { position: absolute; top: 3px; bottom: 3px; display: flex; align-items: center; justify-content: space-between; gap: 4px; min-width: 8px; padding: 0 7px; overflow: hidden; touch-action: none; border: 0; border-radius: 7px; color: #fff; cursor: grab; box-shadow: 0 3px 8px #09233d35; user-select: none; }
 .walkup-timeline-clip:active { cursor: grabbing; filter: brightness(1.08); }
 .walkup-timeline-clip.microphone { background: linear-gradient(110deg,#1c6eb2,#3894d2); }
 .walkup-timeline-clip.music { background: linear-gradient(110deg,#e38b2d,#ffb44f); color: #142a40; }
