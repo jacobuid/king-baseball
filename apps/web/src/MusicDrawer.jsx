@@ -15,14 +15,23 @@ export function MusicDrawer({ api, target, player, onClose, onAssigned }) {
   const [pending, setPending] = useState(null)
   const [retry, setRetry] = useState(0)
   const [pollTick, setPollTick] = useState(0)
+  const [closing, setClosing] = useState(false)
   const active = useRef(true)
   const preview = useRef(null)
   const previewSequence = useRef(0)
+  const closeTimer = useRef(null)
   useEffect(() => {
     active.current = true
     api().then(data => { if (active.current) { setLibrary(data); setSelected(data.assignments[target] || []) } }).catch(e => { if (active.current) setError(e.message) })
-    return () => { active.current = false; previewSequence.current++; preview.current?.pause() }
+    return () => { active.current = false; previewSequence.current++; preview.current?.pause(); clearTimeout(closeTimer.current) }
   }, [api, target, retry])
+  function closeDrawer() {
+    if (closing) return
+    setClosing(true)
+    previewSequence.current++
+    preview.current?.pause()
+    closeTimer.current = setTimeout(onClose, 220)
+  }
   useEffect(() => {
     if (!library?.configured || query.trim().length < 3) { setResults([]); setSearching(false); return }
     let current = true
@@ -60,7 +69,7 @@ export function MusicDrawer({ api, target, player, onClose, onAssigned }) {
     setBusy(true); setError('')
     try {
       await api('/assign', { target, tracks: ids }, 'PUT')
-      if (active.current) { onAssigned(ids.map(id => library.tracks.find(t => t.id === id)).filter(Boolean)); onClose() }
+      if (active.current) { onAssigned(ids.map(id => library.tracks.find(t => t.id === id)).filter(Boolean)); closeDrawer() }
     } catch (e) { if (active.current) setError(e.message) }
     finally { if (active.current) setBusy(false) }
   }
@@ -73,13 +82,13 @@ export function MusicDrawer({ api, target, player, onClose, onAssigned }) {
     } catch (e) { if (active.current && sequence === previewSequence.current) setError(e.message) }
   }
   const team = target === 'team'
-  return <Modal className="music-drawer" title={team ? 'Team songs' : 'Walk-up music'} onClose={onClose}>
+  return <Modal className={`music-drawer${closing ? ' closing' : ''}`} title={team ? 'Team songs' : 'Walk-up music'} onClose={closeDrawer}>
     <p>{team ? 'Full songs for pregame, postgame, and between innings.' : `Choose the entrance song for ${player.name}.`}</p>
     {error && <p className="validation" role="alert">{error} <button type="button" onClick={() => setRetry(n => n + 1)}>Retry</button></p>}
     {notice && <p role="status">{notice}</p>}
     {!library ? <p role="status">Loading your music library…</p> : <>
       {!library.configured && <p role="status">Music imports will be available once the Google music service is connected.</p>}
-      <label htmlFor="music-search">SEARCH MUSIC</label><input id="music-search" autoFocus type="search" placeholder="Song or artist" maxLength={100} value={query} disabled={!library.configured} onChange={e => setQuery(e.target.value)} />
+      <label htmlFor="music-search">SEARCH MUSIC</label><input id="music-search" type="search" placeholder="Song or artist" maxLength={100} value={query} disabled={!library.configured} onChange={e => setQuery(e.target.value)} />
       <div className="music-search-types" role="group" aria-label="Search category">{['songs', 'videos'].map(type => <button key={type} type="button" aria-pressed={searchType === type} disabled={!library.configured} onClick={() => setSearchType(type)}>{type === 'songs' ? 'Songs' : 'Videos'}</button>)}</div>
       {searching && <p role="status">Searching…</p>}
       {!searching && query.trim().length >= 3 && library.configured && results.length === 0 && <p>No results. Try another song or artist.</p>}

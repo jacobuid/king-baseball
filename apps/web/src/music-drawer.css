@@ -1,0 +1,83 @@
+.sheet.music-drawer {
+  height: min(92dvh, 760px);
+  max-height: 92dvh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding-top: max(18px, env(safe-area-inset-top));
+  animation: music-drawer-enter 380ms cubic-bezier(.22, 1, .36, 1) both;
+  will-change: transform, opacity;
+  backface-visibility: hidden;
+}
+
+.music-drawer input[type="search"] {
+  display: block;
+  width: 100%;
+  height: 52px;
+  margin: 0;
+  padding: 0 14px;
+  border: 1.5px solid #dce5ee;
+  border-radius: 12px;
+  outline: none;
+  appearance: none;
+  -webkit-appearance: none;
+  background: #fff;
+  color: #162d47;
+  font: inherit;
+  font-size: 16px;
+}
+
+.music-drawer input[type="search"]::placeholder {
+  color: #9cacc1;
+}
+
+.music-drawer input[type="search"]:focus {
+  border-color: #327bd0;
+  box-shadow: 0 0 0 3px #327bd015;
+}
+
+.music-drawer input[type="search"]::-webkit-search-cancel-button {
+  opacity: .55;
+}
+
+.sheet.music-drawer::backdrop {
+  animation: music-backdrop-enter 300ms ease-out both;
+}
+
+.sheet.music-drawer.closing {
+  pointer-events: none;
+  animation: music-drawer-exit 220ms cubic-bezier(.4, 0, 1, 1) both;
+}
+
+.sheet.music-drawer.closing::backdrop {
+  animation: music-backdrop-exit 220ms ease-in both;
+}
+
+@keyframes music-drawer-enter {
+  from { transform: translate3d(0, -102%, 0); opacity: .6; }
+  to { transform: translate3d(0, 0, 0); opacity: 1; }
+}
+
+@keyframes music-drawer-exit {
+  from { transform: translate3d(0, 0, 0); opacity: 1; }
+  to { transform: translate3d(0, -102%, 0); opacity: .5; }
+}
+
+@keyframes music-backdrop-enter {
+  from { background: #06172d00; }
+  to { background: #06172db0; }
+}
+
+@keyframes music-backdrop-exit {
+  from { background: #06172db0; }
+  to { background: #06172d00; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sheet.music-drawer,
+  .sheet.music-drawer.closing,
+  .sheet.music-drawer::backdrop,
+  .sheet.music-drawer.closing::backdrop {
+    animation: none;
+  }
+}
