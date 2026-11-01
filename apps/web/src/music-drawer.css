@@ -113,6 +113,17 @@
   outline-offset: 2px;
 }
 
+.music-result .music-import-button {
+  display: grid;
+  place-items: center;
+  flex: 0 0 40px;
+  width: 40px;
+  height: 40px;
+  min-height: 40px;
+  padding: 0;
+  border-radius: 50%;
+}
+
 .music-search-preview {
   margin-top: 14px;
   overflow: hidden;
