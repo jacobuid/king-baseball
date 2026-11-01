@@ -40,19 +40,22 @@
   opacity: .55;
 }
 
-.music-upload {
+.sheet label.music-upload {
   display: flex;
+  flex-direction: row;
   align-items: center;
-  gap: 11px;
+  gap: 14px;
   width: 100%;
   min-height: 58px;
-  margin-top: 10px;
+  margin: 10px 0 0;
   padding: 10px 14px;
   border: 1.5px dashed #bad3ed;
   border-radius: 12px;
   background: #f4f8ff;
   color: #1d67bc;
   cursor: pointer;
+  font-weight: inherit;
+  letter-spacing: normal;
 }
 
 .music-upload > span {
