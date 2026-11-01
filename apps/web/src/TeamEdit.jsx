@@ -1,30 +1,19 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAuth } from '@clerk/clerk-react'
-import { Icon, Modal } from './ui'
+import { Icon } from './ui'
+import { MusicDrawer } from './MusicDrawer'
+import { createMusicApi, mergeMusic } from './musicApi'
 import { teamStorage } from './teamStorage'
 import { createTeamApi } from './teamApi'
 import { JerseyPicker } from './JerseyPicker'
 import { DivisionPicker } from './DivisionPicker'
 import { TeamLogoUpload } from './TeamLogoUpload'
 
-function MusicEditor({ player, onSave, onClose }) {
-  const [title, setTitle] = useState(player.song?.title || '')
-  const [artist, setArtist] = useState(player.song?.artist || '')
-  const [file, setFile] = useState(player.song?.file || null)
-  const [error, setError] = useState('')
-  const [preview, setPreview] = useState('')
-  useEffect(() => { if (!file) { setPreview(''); return } const url = URL.createObjectURL(file); setPreview(url); return () => URL.revokeObjectURL(url) }, [file])
-  function submit(event) {
-    event.preventDefault()
-    const songTitle = title.trim() || file?.name.replace(/\.[^.]+$/, '')
-    if (!songTitle) { setError('Enter a song title or choose an audio file.'); return }
-    onSave({ title: songTitle, artist: artist.trim(), file })
-  }
-  return <Modal title="Walk-up music" onClose={onClose}><p>Set the soundtrack for <strong>{player.name}</strong>.</p><form onSubmit={submit}><label htmlFor="song-title">SONG TITLE</label><input autoFocus id="song-title" type="text" placeholder="e.g. Thunderstruck" maxLength={100} value={title} onChange={e => setTitle(e.target.value)} /><label htmlFor="song-artist">ARTIST (OPTIONAL)</label><input id="song-artist" type="text" placeholder="Artist name" maxLength={100} value={artist} onChange={e => setArtist(e.target.value)} /><label htmlFor="song-file">AUDIO FILE (OPTIONAL)</label><div className="upload"><span>{file?.name || 'Choose an audio file from your device'}</span><input id="song-file" type="file" accept="audio/*" onChange={e => { const chosen = e.target.files?.[0]; if (!chosen) return; if (chosen.type && !chosen.type.startsWith('audio/')) { setError('Please choose an audio file.'); return } if (chosen.size > 25 * 1024 * 1024) { setError('Choose an audio file smaller than 25 MB.'); return } setFile(chosen); setError('') }} /></div>{preview && <><audio controls src={preview} /><button type="button" className="remove-song" onClick={() => setFile(null)}>Remove audio file</button></>}{error && <p className="validation" role="alert">{error}</p>}<button className="sheet-save button-primary" type="submit">Save Walk-up Music</button>{player.song && <button type="button" className="remove-song" onClick={() => onSave(null)}>Remove music</button>}</form></Modal>
-}
 export function TeamEdit({ userId, onSaved, onDirtyChange, onSavingChange }) {
   const { getToken } = useAuth()
   const requestTeam = useMemo(() => createTeamApi(getToken), [getToken])
+  const requestMusic = useMemo(() => createMusicApi(getToken), [getToken])
+  const [teamSongs, setTeamSongs] = useState([])
   const [version, setVersion] = useState(0)
   const [loadFailed, setLoadFailed] = useState(false)
   const [teamName, setTeamName] = useState('')
@@ -55,6 +44,8 @@ export function TeamEdit({ userId, onSaved, onDirtyChange, onSavingChange }) {
       const saved = await requestTeam()
       const local = await teamStorage(userId).catch(() => null)
       if (!isActive()) return
+      const music = await requestMusic()
+      if (!isActive()) return
       const source = saved || local
       setVersion(saved?.version || 0)
       setTeamName(source?.name || '')
@@ -62,14 +53,16 @@ export function TeamEdit({ userId, onSaved, onDirtyChange, onSavingChange }) {
       setPrimaryColor(source?.primaryColor || '#041c36')
       setLogoDataUrl(saved ? undefined : local?.logoDataUrl || undefined)
       setLogoUrl(saved?.logoUrl || saved?.logoDataUrl || null)
-      setPlayers((source?.players || []).map(player => ({ ...player, song: local?.players?.find(p => p.id === player.id)?.song || null })))
+      const merged = mergeMusic(source || { players: [] }, local, music)
+      setPlayers(merged.players)
+      setTeamSongs(merged.teamSongs)
       dirty.current = !saved && !!local
       onDirtyChange(dirty.current)
       setStatus(saved ? '' : local ? 'Device roster loaded as a draft. Save Team to add it to your account.' : '')
     } catch (error) {
       if (isActive()) { setLoadFailed(true); setError(error.message || 'Could not load your team. Check your connection and retry.') }
     } finally { if (isActive()) setLoading(false) }
-  }, [requestTeam, userId, onDirtyChange])
+  }, [requestTeam, requestMusic, userId, onDirtyChange])
   useEffect(() => {
     let active = true
     loadTeam(() => active)
@@ -101,7 +94,7 @@ export function TeamEdit({ userId, onSaved, onDirtyChange, onSavingChange }) {
       dirty.current = false
       onDirtyChange(false)
       setStatus('Team and players saved to your account.')
-      // Retain existing device-only music behavior; send no music to the API.
+      // Preserve legacy device audio while imported songs sync independently.
       try { await teamStorage(userId, { name: saved.name, division, primaryColor, players: nextPlayers }) }
       catch { setStatus('Team and players saved online. Device-only music could not be saved.') }
       if (showConfirmation) { onSavingChange(false); onSaved(saved) }
@@ -110,5 +103,5 @@ export function TeamEdit({ userId, onSaved, onDirtyChange, onSavingChange }) {
     catch (error) { setError(error.message || 'Could not save your team. Your changes are still open here.'); return false }
     finally { setSaving(false) }
   }
-  return <><main id="team" className="form-panel">{loadFailed && <div className="team-connection-notice" role="status">Your saved team could not be loaded. You can enter a draft below. Refresh the page to reconnect before saving to your account.</div>}{error && <p className="validation" role="alert">{error}</p>}<fieldset disabled={loading || saving} className="team-fields"><div className="team-identity-row"><div className="team-name-control"><label className="label" htmlFor="team-name"><span>TEAM NAME</span><span className="required">* REQUIRED</span></label><div className="field"><Icon name="team" size={20} /><input ref={teamInput} id="team-name" required placeholder="e.g. King Sluggers" maxLength={48} autoComplete="organization" value={teamName} onChange={e => { setTeamName(e.target.value); changed() }} /></div><div className="team-name-options"><label className="team-color-control" title="Choose team primary color"><span className="sr-only">Team primary color</span><input type="color" value={primaryColor} aria-label="Team primary color" onChange={event => { setPrimaryColor(event.target.value); changed() }} /></label><button type="button" className="division-button button-tertiary" aria-label={`Choose team division${division ? `, currently ${division}` : ""}`} onClick={() => setDivisionOpen(true)}><Icon name="league" size={14} /><span>{division || "Select division"}</span><Icon name="chevronDown" size={12} /></button></div></div><TeamLogoUpload value={logoDataUrl === undefined ? logoUrl : logoDataUrl} onChange={logo => { setLogoDataUrl(logo); changed() }} onError={setError} onBusy={setLogoBusy} /></div><div className="section-head"><div><h2>Players</h2><p>Add everyone on the roster</p></div><span className="count">{players.length} {players.length === 1 ? 'PLAYER' : 'PLAYERS'}</span></div><form className="add-row" onSubmit={addPlayer}><div className="field"><Icon name="user" size={20} /><input ref={playerInput} aria-label="Player name" placeholder="Enter player's name" maxLength={55} autoComplete="off" value={playerName} onChange={e => setPlayerName(e.target.value)} /></div><button className="add-btn" type="submit" aria-label="Add player"><Icon name="plus" size={24} /></button></form><div className="helper">Tap + or press Enter to add a player</div><div className="roster">{players.length ? players.map((player, i) => <div key={player.id} className="player"><button type="button" className="number jersey-number button-tertiary" aria-label={`Set jersey number for ${player.name}${player.jerseyNumber ? `, currently ${player.jerseyNumber}` : ""}`} onClick={() => { setError(''); setJerseyPlayer(player) }}>{player.jerseyNumber ?? "--"}</button><div className="player-info"><strong>{player.name}</strong><small className={player.song ? 'assigned' : ''}>{player.song ? `${player.song.title}${player.song.artist ? ' · ' + player.song.artist : ''}` : 'No walk-up music yet'}</small></div><button className={`music-btn button-secondary ${player.song ? 'assigned' : ''}`} aria-label={`${player.song ? 'Edit' : 'Add'} walk-up music for ${player.name}`} onClick={() => setSelected(player)}><Icon name="music" size={13} />{player.song ? 'Edit music' : 'Add music'}</button><button className="remove-btn" aria-label={`Remove ${player.name}`} onClick={() => { setPlayers(players.filter(p => p.id !== player.id)); changed() }}><Icon name="trash" size={18} /></button></div>) : <div className="empty"><div className="empty-icon"><Icon name="peopleGroup" size={69} /></div><strong>{loading ? 'Loading your team…' : 'Your roster is empty'}</strong><p>Every great team starts with<br />the first player.</p></div>}</div><div className="tip"><div className="tip-icon"><Icon name="music" size={20} /></div><p><strong>Make their entrance count.</strong><br />Add team songs for pregame, postgame, and between-inning transitions.</p></div></fieldset></main><footer className="bottom"><button className="save button-primary" disabled={loading || saving || loadFailed || logoBusy} onClick={() => save()}>{saving ? 'Saving...' : <>Save Team <Icon name="arrowRight" size={15} /></>}</button>{status && <p role="status">{status}</p>}</footer>{divisionOpen && <DivisionPicker value={division} onClose={() => setDivisionOpen(false)} onSave={value => { setDivision(value); setDivisionOpen(false); changed() }} />}{jerseyPlayer && <JerseyPicker player={jerseyPlayer} onClose={() => setJerseyPlayer(null)} saving={saving} error={error} onSave={async jerseyNumber => { const nextPlayers = players.map(p => p.id === jerseyPlayer.id ? { ...p, jerseyNumber } : p); if (await save(nextPlayers, false)) { setJerseyPlayer(null); setStatus(`Jersey number saved for ${jerseyPlayer.name}.`) } }} />}{selected && <MusicEditor player={selected} onClose={() => setSelected(null)} onSave={song => { setPlayers(players.map(p => p.id === selected.id ? { ...p, song } : p)); setSelected(null); changed() }} />}</>
+  return <><main id="team" className="form-panel">{loadFailed && <div className="team-connection-notice" role="status">Your saved team could not be loaded. You can enter a draft below. Refresh the page to reconnect before saving to your account.</div>}{error && <p className="validation" role="alert">{error}</p>}<fieldset disabled={loading || saving} className="team-fields"><div className="team-identity-row"><div className="team-name-control"><label className="label" htmlFor="team-name"><span>TEAM NAME</span><span className="required">* REQUIRED</span></label><div className="field"><Icon name="team" size={20} /><input ref={teamInput} id="team-name" required placeholder="e.g. King Sluggers" maxLength={48} autoComplete="organization" value={teamName} onChange={e => { setTeamName(e.target.value); changed() }} /></div><div className="team-name-options"><label className="team-color-control" title="Choose team primary color"><span className="sr-only">Team primary color</span><input type="color" value={primaryColor} aria-label="Team primary color" onChange={event => { setPrimaryColor(event.target.value); changed() }} /></label><button type="button" className="division-button button-tertiary" aria-label={`Choose team division${division ? `, currently ${division}` : ""}`} onClick={() => setDivisionOpen(true)}><Icon name="league" size={14} /><span>{division || "Select division"}</span><Icon name="chevronDown" size={12} /></button></div></div><TeamLogoUpload value={logoDataUrl === undefined ? logoUrl : logoDataUrl} onChange={logo => { setLogoDataUrl(logo); changed() }} onError={setError} onBusy={setLogoBusy} /></div><div className="section-head"><div><h2>Players</h2><p>Add everyone on the roster</p></div><span className="count">{players.length} {players.length === 1 ? 'PLAYER' : 'PLAYERS'}</span></div><form className="add-row" onSubmit={addPlayer}><div className="field"><Icon name="user" size={20} /><input ref={playerInput} aria-label="Player name" placeholder="Enter player's name" maxLength={55} autoComplete="off" value={playerName} onChange={e => setPlayerName(e.target.value)} /></div><button className="add-btn" type="submit" aria-label="Add player"><Icon name="plus" size={24} /></button></form><div className="helper">Tap + or press Enter to add a player</div><div className="roster">{players.length ? players.map((player, i) => <div key={player.id} className="player"><button type="button" className="number jersey-number button-tertiary" aria-label={`Set jersey number for ${player.name}${player.jerseyNumber ? `, currently ${player.jerseyNumber}` : ""}`} onClick={() => { setError(''); setJerseyPlayer(player) }}>{player.jerseyNumber ?? "--"}</button><div className="player-info"><strong>{player.name}</strong><small className={player.song ? 'assigned' : ''}>{player.song ? `${player.song.title}${player.song.artist ? ' · ' + player.song.artist : ''}` : 'No walk-up music yet'}</small></div><button className={`music-btn button-secondary ${player.song ? 'assigned' : ''}`} aria-label={`${player.song ? 'Edit' : 'Add'} walk-up music for ${player.name}`} onClick={() => setSelected(player)}><Icon name="music" size={13} />{player.song ? 'Edit music' : 'Add music'}</button><button className="remove-btn" aria-label={`Remove ${player.name}`} onClick={() => { setPlayers(players.filter(p => p.id !== player.id)); changed() }}><Icon name="trash" size={18} /></button></div>) : <div className="empty"><div className="empty-icon"><Icon name="peopleGroup" size={69} /></div><strong>{loading ? 'Loading your team…' : 'Your roster is empty'}</strong><p>Every great team starts with<br />the first player.</p></div>}</div><button type="button" className="tip team-music-button" onClick={() => setSelected({ id: 'team' })}><div className="tip-icon"><Icon name="music" size={20} /></div><p><strong>Make their entrance count.</strong><br />{teamSongs.length ? `${teamSongs.length} team songs selected. Manage your playlist.` : 'Add team songs for pregame, postgame, and between-inning transitions.'}</p></button></fieldset></main><footer className="bottom"><button className="save button-primary" disabled={loading || saving || loadFailed || logoBusy} onClick={() => save()}>{saving ? 'Saving...' : <>Save Team <Icon name="arrowRight" size={15} /></>}</button>{status && <p role="status">{status}</p>}</footer>{divisionOpen && <DivisionPicker value={division} onClose={() => setDivisionOpen(false)} onSave={value => { setDivision(value); setDivisionOpen(false); changed() }} />}{jerseyPlayer && <JerseyPicker player={jerseyPlayer} onClose={() => setJerseyPlayer(null)} saving={saving} error={error} onSave={async jerseyNumber => { const nextPlayers = players.map(p => p.id === jerseyPlayer.id ? { ...p, jerseyNumber } : p); if (await save(nextPlayers, false)) { setJerseyPlayer(null); setStatus(`Jersey number saved for ${jerseyPlayer.name}.`) } }} />}{selected && <MusicDrawer api={requestMusic} target={selected.id} player={selected} onClose={() => setSelected(null)} onAssigned={songs => { if (selected.id === 'team') setTeamSongs(songs); else setPlayers(current => current.map(p => p.id === selected.id ? { ...p, song: songs[0] || null } : p)) }} />}</>
 }

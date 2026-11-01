@@ -6,6 +6,7 @@
     "build": "npm run build -w apps/web",
     "dev:web": "npm run dev -w apps/web",
     "dev:api": "npm run dev -w services/api",
-    "check": "node --experimental-strip-types --test scripts/deployment.test.mjs scripts/teams.test.mjs && npm run build && npm run check -w services/api && npm run check -w infrastructure/pulumi"
+    "check": "node --experimental-strip-types --test scripts/deployment.test.mjs scripts/teams.test.mjs scripts/music.test.mjs && npm run build && npm run check -w services/api && npm run check -w infrastructure/pulumi",
+    "deploy:music": "node scripts/deploy-music.mjs"
   }
 }

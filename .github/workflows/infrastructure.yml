@@ -57,6 +57,10 @@ jobs:
           B2_APPLICATION_KEY: ${{ steps.b2.outputs.application_key }}
           B2_LOGO_KEY_ID: ${{ steps.b2.outputs.logo_key_id }}
           B2_LOGO_APPLICATION_KEY: ${{ steps.b2.outputs.logo_application_key }}
+          B2_MUSIC_KEY_ID: ${{ steps.b2.outputs.music_key_id }}
+          B2_MUSIC_APPLICATION_KEY: ${{ steps.b2.outputs.music_application_key }}
+          MUSIC_SERVICE_TOKEN: ${{ secrets.MUSIC_SERVICE_TOKEN }}
+          MUSIC_SERVICE_URL: ${{ secrets.MUSIC_SERVICE_URL }}
           CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
           CLERK_PUBLISHABLE_KEY: ${{ secrets.CLERK_PUBLISHABLE_KEY }}
           WRITE_SECRETS: 'true'

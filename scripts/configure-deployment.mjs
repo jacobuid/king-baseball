@@ -31,4 +31,7 @@ const secrets = {
   B2_LOGO_APPLICATION_KEY: process.env.B2_LOGO_APPLICATION_KEY,
 }
 for (const [name, value] of Object.entries(secrets)) if (!value) throw new Error(`${name} is missing`)
+for (const name of ['B2_MUSIC_KEY_ID', 'B2_MUSIC_APPLICATION_KEY', 'MUSIC_SERVICE_TOKEN', 'MUSIC_SERVICE_URL']) {
+  if (process.env[name]) secrets[name] = process.env[name]
+}
 writeFileSync('services/api/.deployment-secrets.json', JSON.stringify(secrets))

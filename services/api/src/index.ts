@@ -2,8 +2,9 @@ import { createClerkClient } from '@clerk/backend'
 import { AwsClient } from 'aws4fetch'
 import { handleTeamRequest } from './teams'
 import { createLogoStorage } from './logo-storage'
+import { handleMusicRequest, handleMusicCallback, handleMusicContent, musicUploadUrl, type MusicEnv } from './music'
 
-interface Env { DB: D1Database; CLERK_SECRET_KEY: string; CLERK_PUBLISHABLE_KEY: string; B2_KEY_ID: string; B2_APPLICATION_KEY: string; B2_LOGO_KEY_ID: string; B2_LOGO_APPLICATION_KEY: string; B2_ENDPOINT: string; B2_BUCKET: string; WEB_ORIGIN: string }
+interface Env extends MusicEnv { CLERK_SECRET_KEY: string; CLERK_PUBLISHABLE_KEY: string; B2_KEY_ID: string; B2_APPLICATION_KEY: string; B2_LOGO_KEY_ID: string; B2_LOGO_APPLICATION_KEY: string; WEB_ORIGIN: string }
 type Media = { id: string; title: string; description: string; category: string; video_key: string; thumbnail_key: string | null; mime_type: string; created_at: string }
 
 const json = (data: unknown, status = 200) => new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } })
@@ -23,13 +24,20 @@ async function authorize(request: Request, env: Env) {
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const origin = request.headers.get('Origin')
-    const cors = { 'Access-Control-Allow-Origin': origin === env.WEB_ORIGIN ? origin : env.WEB_ORIGIN, 'Access-Control-Allow-Headers': 'Authorization, Content-Type', 'Access-Control-Allow-Methods': 'GET, POST, PUT, OPTIONS', 'Vary': 'Origin' }
+    const cors = { 'Access-Control-Allow-Origin': origin === env.WEB_ORIGIN ? origin : env.WEB_ORIGIN, 'Access-Control-Allow-Headers': 'Authorization, Content-Type, Range', 'Access-Control-Allow-Methods': 'GET, HEAD, POST, PUT, OPTIONS', 'Access-Control-Expose-Headers': 'Content-Length, Content-Range, Accept-Ranges', 'Vary': 'Origin' }
     if (request.method === 'OPTIONS') return new Response(null, { headers: cors })
     try {
+      const incomingPath = new URL(request.url).pathname
+      if (incomingPath.startsWith('/api/internal/music/')) {
+        if (incomingPath.endsWith('/upload') && request.method === 'POST') return await musicUploadUrl(request, env)
+        return await handleMusicCallback(request, env)
+      }
+      if (incomingPath.startsWith('/content/music/')) return withCors(await handleMusicContent(request, env), cors)
       const userId = await authorize(request, env)
       if (!userId) return withCors(json({ error: 'Unauthorized' }, 401), cors)
       const url = new URL(request.url)
       const path = url.pathname
+      if (path === '/api/music' || path.startsWith('/api/music/')) return withCors(await handleMusicRequest(request, env, userId), cors)
       if (path === '/api/team') return withCors(await handleTeamRequest(request, env.DB, userId, createLogoStorage(env)), cors)
       if (path === '/api/profiles' && request.method === 'GET') {
         const rows = await env.DB.prepare('SELECT id,name FROM profiles WHERE user_id = ? ORDER BY created_at').bind(userId).all()

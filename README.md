@@ -1,10 +1,10 @@
 # KingSports
 
-KingSports application foundation using React, Vite, Clerk, Cloudflare Workers, D1, Backblaze B2, Pulumi, GitHub Pages, and GitHub Actions. The React Team screen saves teams and players to the authenticated Cloudflare API and D1 database. Existing walk-up song editing and audio previews remain device-local; no music schema or music API is implemented. Legacy media-library API routes remain available.
+KingSports uses React, Vite, Clerk, Cloudflare Workers, D1, Backblaze B2, Pulumi, GitHub Pages, and GitHub Actions. Teams, players, and music assignments sync to the authenticated account. Google Cloud Run processes music imports with yt-dlp and FFmpeg, queued through Cloud Tasks and stored privately in B2. Legacy media-library API routes remain available.
 
 ## Team and player data
 
-The Team menu opens `TeamView` at `#/team`, with the saved team details and roster. The yellow Edit Team button opens `TeamEdit` at `#/team/edit`. Save Team returns to the view only after a successful save; immediate jersey-number saves stay in the editor. Player controls on TeamView only play/stop existing device-local audio. Team Playlist plays the available local files in roster order. All editing stays on TeamEdit; no music API or database has been added.
+The Team menu opens `TeamView` at `#/team`, with the saved team details and roster. The yellow Edit Team button opens `TeamEdit` at `#/team/edit`. Save Team returns to the view only after a successful save; immediate jersey-number saves stay in the editor. Player controls on TeamView play/stop assigned walk-up audio. Team Playlist plays separately selected full team songs in their saved order. All editing stays on TeamEdit. The top music drawer searches, imports, previews, and assigns account music; assignment changes save immediately. Player clip start/duration controls are deferred.
 
 - Each Clerk account owns one team, matching the current single-team screen. Ownership comes from the verified session, never from a request field.
 - `teams` stores the team ID, owner, name, version, timestamps, a B2 logo file key, and a mutation identifier used for safe concurrent saves. Logos are resized in the browser (up to 384 pixels), compressed, and uploaded by the authenticated Worker to private B2 storage; original uploads are not stored. PNG, JPG, and WebP uploads up to 20 MB are supported. The optional upload field `logoDataUrl` is capped at 180,000 characters; `null` removes the logo and omitting the field preserves it. Responses provide a signed `logoUrl` valid for one hour instead of embedding the image.
@@ -77,3 +77,7 @@ git remote set-url origin https://github.com/jacobuid/king-sports.git
 ```
 
 The workflows derive the Worker, bucket, and Pages path from the repository name. After pushing, run **Provision infrastructure** and then **Web** to create the new KingSports resources. If `VITE_API_URL` is set as a repository variable, remove it to use automatic discovery or update it to the new Worker URL. Rename the Clerk application display name to KingSports while retaining its current keys and user pool.
+## Music importer
+
+Google Cloud Run + yt-dlp + FFmpeg setup and deployment:
+[services/music/README.md](services/music/README.md).

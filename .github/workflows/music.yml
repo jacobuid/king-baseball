@@ -1,0 +1,23 @@
+name: Music service checks
+on:
+  push:
+    branches: [main]
+    paths: ['services/music/**', 'scripts/deploy-music.mjs', '.github/workflows/music.yml']
+  pull_request:
+    paths: ['services/music/**', 'scripts/deploy-music.mjs', '.github/workflows/music.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r services/music/requirements.txt httpx
+      - run: python -m unittest discover -s tests -v
+        working-directory: services/music
+      - name: Build Cloud Run container
+        run: docker build -t king-sports-music services/music

@@ -2,7 +2,7 @@ name: API
 on:
   push:
     branches: [main]
-    paths: ['shared/**', 'services/api/**', 'infrastructure/pulumi/**', 'scripts/configure-deployment.mjs', 'scripts/teams.test.mjs', 'package.json', 'package-lock.json', '.github/workflows/api.yml']
+    paths: ['shared/**', 'services/api/**', 'infrastructure/pulumi/**', 'scripts/configure-deployment.mjs', 'scripts/teams.test.mjs', 'scripts/music.test.mjs', 'package.json', 'package-lock.json', '.github/workflows/api.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -24,7 +24,7 @@ jobs:
       - run: npm ci
       - name: Check team data and API types
         run: |
-          node --experimental-strip-types --test scripts/teams.test.mjs
+          node --experimental-strip-types --test scripts/teams.test.mjs scripts/music.test.mjs
           npm run check -w services/api
       - name: Update D1 infrastructure
         id: pulumi
