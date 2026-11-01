@@ -32,11 +32,11 @@
   }
 
   .orientation-lock strong {
-    font-size: clamp(20px, 5dvh, 30px);
+    font-size:clamp(22px, 5dvh, 32px);
   }
 
   .orientation-lock span {
     color: #c7d9e9;
-    font-size: 14px;
+    font-size:16px;
   }
 }

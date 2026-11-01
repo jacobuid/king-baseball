@@ -89,9 +89,9 @@
 }
 .welcome-brand img { display: block; width: 160px; height: auto; filter: drop-shadow(0 5px 12px #0008); }
 .welcome-panel { padding: 0; background: transparent; }
-.welcome-eyebrow { color: var(--theme-yellow); font-size: 10px; font-weight: 800; letter-spacing: 2px; }
-.welcome-panel h1 { color: #fff; font-size: clamp(38px, 11vw, 48px); line-height: 1.05; letter-spacing: -1.8px; margin: 16px 0; text-shadow: 0 3px 12px #0007; }
-.welcome-panel .welcome-copy { color: #fff; font-size: 15px; line-height: 1.6; margin: 0 0 28px; text-shadow: 0 2px 8px #0008; }
+.welcome-eyebrow { color: var(--theme-yellow); font-size:12px; font-weight: 800; letter-spacing: 2px; }
+.welcome-panel h1 { color: #fff; font-size:clamp(40px, 11vw, 50px); line-height: 1.05; letter-spacing: -1.8px; margin: 16px 0; text-shadow: 0 3px 12px #0007; }
+.welcome-panel .welcome-copy { color: #fff; font-size:17px; line-height: 1.6; margin: 0 0 28px; text-shadow: 0 2px 8px #0008; }
 .welcome-sign-in { background: var(--theme-yellow); color: var(--theme-blue-dark); box-shadow: 0 8px 24px #0004; }
 .welcome-sign-in:hover { background: #ffc477; }
 @media (min-width: 600px) { .app.welcome { min-height: calc(100dvh - 40px); } }

@@ -79,7 +79,7 @@
   border: 1px solid var(--team-border, #285477);
   border-radius: 8px;
   color: #b5cce1;
-  font-size: 11px;
+  font-size:13px;
   font-weight: 800;
 }
 
@@ -98,13 +98,13 @@
 
 .view-playlist-song strong {
   color: #fff;
-  font-size: 13px;
+  font-size:15px;
 }
 
 .view-playlist-song small {
   margin-top: 4px;
   color: #a9c4da;
-  font-size: 10px;
+  font-size:12px;
 }
 
 .view-playlist-song.active .view-play {
