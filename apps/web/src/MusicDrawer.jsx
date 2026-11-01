@@ -156,7 +156,7 @@ export function MusicDrawer({ api, target, player, onClose, onAssigned }) {
     return () => { current = false; clearTimeout(timer) }
   }, [api, library, pending, pollTick])
   async function importSong(videoId) {
-    setBusy(true); setError(''); setNotice('')
+    setBusy(true); setError(''); setNotice(''); setQuery(''); setResults([]); setSearchPreview(null); setSearching(false)
     try {
       const { track } = await api('/import', { videoId })
       if (!active.current) return
@@ -459,7 +459,7 @@ export function MusicDrawer({ api, target, player, onClose, onAssigned }) {
             {!library.configured && <p role="status">Music imports will be available once the Google music service is connected.</p>}
             <label className={`music-upload${busy ? ' disabled' : ''}`}><Icon name="upload" size={28} /><span><strong>{busy ? 'Working…' : 'Upload music'}</strong><small>MP3, M4A, AAC, or WAV · up to 50 MB</small></span><input type="file" accept=".mp3,.m4a,.mp4,.aac,.wav,audio/mpeg,audio/mp4,audio/aac,audio/wav" disabled={busy} onChange={uploadSong} /></label>
             <input id="music-search" aria-label="Search Music" type="search" placeholder="Search Music" maxLength={100} value={query} disabled={!library.configured} onChange={e => { setQuery(e.target.value); setSearchPreview(null) }} />
-            {searching && <p role="status">Searching…</p>}
+            {searching && <div className="music-searching" role="status"><span aria-hidden="true" />Searching…</div>}
             {!searching && query.trim().length >= 3 && library.configured && results.length === 0 && <p>No results. Try another song or artist.</p>}
             <div className="music-results">{results.map(result => {
               const track = library.tracks.find(t => t.videoId === result.videoId)
@@ -470,7 +470,7 @@ export function MusicDrawer({ api, target, player, onClose, onAssigned }) {
           </div>}
           <h2 className="music-library-heading">Your Music</h2>
           {!songTracks.length && <p>Use + above to search for or upload your first song.</p>}
-          {songTracks.map(track => <article key={track.id} className={`music-library-track${clipTrackId === track.id ? ' selected' : ''}`}><div><strong>{track.title}</strong><small>{track.artist} {time(track.duration)}{track.status !== 'ready' && ` · ${track.status}`}</small>{track.status === 'failed' && <small>{track.error}</small>}</div>{track.status === 'ready' ? <><button type="button" className={`music-preview button-tertiary${playingTrackId === track.id ? ' playing' : ''}`} aria-label={`${playingTrackId === track.id ? 'Pause' : 'Play'} ${track.title}`} onClick={() => listen(track)}><Icon name={playingTrackId === track.id ? 'pause' : 'play'} size={14} /></button><button type="button" className="button-secondary" disabled={busy} onClick={() => { chooseClip(track); setMusicEnabled(true) }}>{clipTrackId === track.id ? 'Selected' : 'Select'}</button></> : track.status === 'failed' ? <button type="button" className="button-secondary" disabled={busy} onClick={() => setConfirmation({ type: 'import', track })}>Retry</button> : <span className="music-pending" role="status">Importing…</span>}{['ready', 'failed'].includes(track.status) && <button type="button" className="music-delete-button" disabled={busy} aria-label={`Delete ${track.title} from Your music`} onClick={() => setConfirmation({ type: 'delete', track })}><Icon name="trash" size={15} /></button>}</article>)}
+          {songTracks.map(track => <article key={track.id} className={`music-library-track${clipTrackId === track.id ? ' selected' : ''}`}>{track.status === 'ready' && <input className="walkup-song-radio" type="radio" name="walkup-song" value={track.id} checked={clipTrackId === track.id} aria-label={`Use ${track.title} for this walk-up`} onChange={() => { chooseClip(track); setMusicEnabled(true) }} />}<div><strong>{track.title}</strong><small>{track.artist} {time(track.duration)}{track.status !== 'ready' && ` · ${track.status}`}</small>{track.status === 'failed' && <small>{track.error}</small>}</div>{track.status === 'ready' ? <button type="button" className={`music-preview button-tertiary${playingTrackId === track.id ? ' playing' : ''}`} aria-label={`${playingTrackId === track.id ? 'Pause' : 'Play'} ${track.title}`} onClick={() => listen(track)}><Icon name={playingTrackId === track.id ? 'pause' : 'play'} size={14} /></button> : track.status === 'failed' ? <button type="button" className="button-secondary" disabled={busy} onClick={() => setConfirmation({ type: 'import', track })}>Retry</button> : <span className="music-pending" role="status">Importing…</span>}{['ready', 'failed'].includes(track.status) && <button type="button" className="music-delete-button" disabled={busy} aria-label={`Delete ${track.title} from Your music`} onClick={() => setConfirmation({ type: 'delete', track })}><Icon name="trash" size={15} /></button>}</article>)}
           {musicEnabled && <WalkupClipEditor track={clipTrack} start={clipStart} duration={clipDuration} playing={clipPlaying} busy={busy} previewDisabled={!playerReady} onStart={clip => { setClipStart(clip.start); setClipDuration(clip.duration) }} onDuration={clip => setClipDuration(clip.duration)} onPreview={() => previewWalkup(clipTrack)} />}
         </div>}
       </section>

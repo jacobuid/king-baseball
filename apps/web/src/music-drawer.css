@@ -362,6 +362,9 @@
 .walkup-add-music { display: grid; place-items: center; width: 38px; height: 38px; padding: 0; border: 1px solid #c6dcf2; border-radius: 50%; background: #e2effd; color: #1d67bc; }
 .walkup-get-music { padding: 2px 0 18px; border-bottom: 1px solid #d5e3f0; }
 .walkup-get-music input[type="search"] { margin-top: 10px; }
+.music-searching { display: flex; align-items: center; justify-content: center; gap: 10px; min-height: 52px; margin-top: 12px; border: 1px solid #c9dced; border-radius: 13px; background: #f4f8fd; color: #526f8d; font-size: 14px; font-weight: 800; }
+.music-searching > span { width: 19px; height: 19px; border: 3px solid #b9d1e8; border-top-color: var(--theme-blue-light); border-radius: 50%; animation: music-search-spin .75s linear infinite; }
+.walkup-song-radio { flex: 0 0 22px; width: 22px; height: 22px; margin: 0; accent-color: var(--theme-blue-light); cursor: pointer; }
 .walkup-section-body .music-library-heading { padding: 18px 0 10px; }
 .walkup-section-body .music-library-track.selected { border-radius: 11px; background: #e5f1fd; box-shadow: inset 0 0 0 1px #b9d7f3; }
 .walkup-empty-note { margin: 8px 0 0 !important; padding: 14px; border-radius: 11px; background: #fff; color: #71869b !important; }
@@ -370,6 +373,7 @@
 .walkup-drawer .walkup-clip-editor { margin-top: 18px; }
 @keyframes countdown-pop { from { opacity: .25; transform: scale(.55); } to { opacity: 1; transform: scale(1); } }
 @keyframes recording-pulse { 50% { opacity: .35; transform: scale(.82); } }
+@keyframes music-search-spin { to { transform: rotate(360deg); } }
 
 .sheet.music-drawer::backdrop {
   animation: music-backdrop-enter 300ms ease-out both;
@@ -413,4 +417,5 @@
   .recording-live > span {
     animation: none;
   }
+  .music-searching > span { animation: none; }
 }
