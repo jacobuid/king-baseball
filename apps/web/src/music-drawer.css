@@ -342,6 +342,30 @@
 .walkup-clip-summary { margin: 12px 0 16px !important; color: #667f98 !important; font-size: 12px !important; line-height: 1.5; }
 .walkup-preview { display: flex; align-items: center; justify-content: center; gap: 9px; width: 100%; min-height: 52px; border-radius: 12px; font-size: 15px; font-weight: 800; }
 .walkup-clip-editor .sheet-save { margin-top: 10px; }
+.walkup-sections { display: grid; gap: 12px; }
+.walkup-section { overflow: hidden; border: 1px solid #c9dced; border-radius: 16px; background: #f2f7fd; box-shadow: 0 5px 16px #173b610d; }
+.walkup-section-toggle { display: grid; grid-template-columns: 58px 1fr; align-items: center; min-height: 66px; padding: 8px 10px 8px 14px; }
+.walkup-switch { position: relative; width: 48px; height: 29px; padding: 0; border: 0; border-radius: 999px; background: #bdcbd9; box-shadow: inset 0 1px 3px #29445f2b; transition: background 180ms ease; }
+.walkup-switch span { position: absolute; top: 4px; left: 4px; width: 21px; height: 21px; border-radius: 50%; background: #fff; box-shadow: 0 2px 5px #17334d4a; transition: transform 180ms ease; }
+.walkup-switch.on { background: var(--theme-blue-light); }
+.walkup-switch.on span { transform: translateX(19px); }
+.walkup-switch:focus-visible { outline: 3px solid #327bd052; outline-offset: 2px; }
+.walkup-section-name { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; min-height: 48px; padding: 0 8px 0 4px; border: 0; background: transparent; color: var(--theme-blue-dark); text-align: left; }
+.walkup-section-name strong { font-size: 17px; }
+.walkup-section-name svg { color: #66819c; transition: transform 180ms ease; }
+.walkup-section.open .walkup-section-name svg { transform: rotate(180deg); }
+.walkup-section-body { padding: 0 14px 16px; border-top: 1px solid #d9e6f2; }
+.walkup-section-body > .walkup-intro-editor { margin-top: 14px; }
+.walkup-subhead { display: flex; align-items: center; justify-content: space-between; min-height: 58px; }
+.walkup-subhead h2,.walkup-section-body .music-library-heading { margin: 0 !important; color: var(--theme-blue-dark); font-size: 20px !important; }
+.walkup-add-music { display: grid; place-items: center; width: 38px; height: 38px; padding: 0; border: 1px solid #c6dcf2; border-radius: 50%; background: #e2effd; color: #1d67bc; }
+.walkup-get-music { padding: 2px 0 18px; border-bottom: 1px solid #d5e3f0; }
+.walkup-section-body .music-library-heading { padding: 18px 0 10px; }
+.walkup-section-body .music-library-track.selected { border-radius: 11px; background: #e5f1fd; box-shadow: inset 0 0 0 1px #b9d7f3; }
+.walkup-empty-note { margin: 8px 0 0 !important; padding: 14px; border-radius: 11px; background: #fff; color: #71869b !important; }
+.walkup-drawer > .sheet-save,.walkup-sections > .sheet-save { margin-top: 8px; }
+.walkup-sections > .drawer-cancel { width: 100%; }
+.walkup-drawer .walkup-clip-editor { margin-top: 18px; }
 @keyframes countdown-pop { from { opacity: .25; transform: scale(.55); } to { opacity: 1; transform: scale(1); } }
 @keyframes recording-pulse { 50% { opacity: .35; transform: scale(.82); } }
 

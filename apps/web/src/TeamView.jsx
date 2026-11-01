@@ -55,17 +55,18 @@ export function TeamView({ userId, onEdit }) {
     let objectUrl
     async function play() {
       try {
-        const songUrl = activeSong.status === 'ready' ? (await requestMusic('/' + activeSong.id + '/play', {})).url : activeSong.file instanceof Blob ? (objectUrl = URL.createObjectURL(activeSong.file)) : null
-        if (disposed || !songUrl) return
+        const songUrl = activeSong.id && activeSong.status === 'ready' ? (await requestMusic('/' + activeSong.id + '/play', {})).url : activeSong.file instanceof Blob ? (objectUrl = URL.createObjectURL(activeSong.file)) : null
+        if (disposed || (!songUrl && !activeSong.intro)) return
         if (!activeSong.playbackId.startsWith('team-') && activeSong.intro?.status === 'ready') {
           const introUrl = (await requestMusic('/' + activeSong.intro.id + '/play', {})).url
           if (disposed) return
           introElement.src = introUrl
           await introElement.play()
           const introDuration = Number(activeSong.intro.duration) || 0
-          await new Promise(resolve => setTimeout(resolve, Math.max(0, introDuration - .9) * 1000))
+          await new Promise(resolve => setTimeout(resolve, Math.max(0, introDuration - (songUrl ? .9 : 0)) * 1000))
           if (disposed) return
         }
+        if (!songUrl) { setPlaying(false); setActiveId(null); return }
         element.src = songUrl
         if (activeSong.playbackId.startsWith('team-')) { await element.play(); return }
         if (element.readyState < 1) await new Promise((resolve, reject) => {

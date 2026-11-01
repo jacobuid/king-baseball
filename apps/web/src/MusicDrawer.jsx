@@ -41,19 +41,23 @@ const clampClip = (track, start, duration) => {
   const nextStart = Math.min(Math.max(0, Number(start) || 0), Math.max(0, total - 3))
   return { start: Math.round(nextStart * 10) / 10, duration: Math.round(Math.min(Math.max(3, Number(duration) || 15), 60, total - nextStart) * 10) / 10 }
 }
-function WalkupClipEditor({ track, player, intro, start, duration, playing, recording, countdown, busy, onStart, onDuration, onPreview, onRecord, onIntroUpload, onSave }) {
-  if (!track) return null
+function SectionToggle({ label, checked, open, onToggle, onOpen }) {
+  return <div className="walkup-section-toggle"><button type="button" className={`walkup-switch${checked ? ' on' : ''}`} role="switch" aria-checked={checked} aria-label={`${checked ? 'Disable' : 'Enable'} ${label}`} onClick={onToggle}><span /></button><button type="button" className="walkup-section-name" aria-expanded={open} onClick={onOpen}><strong>{label}</strong><Icon name="chevronDown" size={17} /></button></div>
+}
+function AnnouncerEditor({ player, intro, recording, countdown, busy, onRecord, onIntroUpload }) {
+  return <div className="walkup-intro-editor"><div><span>ANNOUNCER INTRO</span><strong>{recording ? 'Recording now' : intro ? 'Intro ready' : 'Record or upload an intro'}</strong><small>Suggested: “Now batting, {player.jerseyNumber ? `number ${player.jerseyNumber}, ` : ''}{player.name}!”</small></div>{countdown && <div className="recording-countdown" role="status" aria-live="assertive"><strong key={countdown}>{countdown}</strong><span>{countdown === 'GO' ? 'Wait for the ding…' : 'Get ready'}</span></div>}{recording && <div className="recording-live" role="status"><span aria-hidden="true" />Recording</div>}<div className="walkup-intro-actions"><button type="button" className="button-secondary" disabled={busy} onClick={onRecord}><Icon name={recording ? 'stop' : 'microphone'} size={16} />{recording ? 'Stop recording' : intro ? 'Record again' : 'Record intro'}</button><label className="button-secondary"><Icon name="upload" size={15} />Upload intro<input type="file" accept="audio/*,.mp3,.m4a,.mp4,.aac,.wav,.webm,.ogg" disabled={busy || recording} onChange={onIntroUpload} /></label></div></div>
+}
+function WalkupClipEditor({ track, start, duration, playing, busy, previewDisabled, onStart, onDuration, onPreview }) {
+  if (!track) return <p className="walkup-empty-note">Choose a song from Your Music to set the walk-up clip.</p>
   const total = Number(track.duration) || 15
   const maxStart = Math.max(0, total - 3)
   const maxDuration = Math.max(3, Math.min(60, total - start))
   return <section className="walkup-clip-editor" aria-labelledby="walkup-clip-title">
-    <div className="walkup-clip-heading"><span className="walkup-clip-icon"><Icon name="music" size={18} /></span><span><h2 id="walkup-clip-title">Build the walk-up</h2><small>{track.title}</small></span></div>
-    <div className="walkup-intro-editor"><div><span>ANNOUNCER INTRO</span><strong>{recording ? 'Recording now' : intro ? 'Intro ready' : 'Record or upload an intro'}</strong><small>Suggested: “Now batting, {player.jerseyNumber ? `number ${player.jerseyNumber}, ` : ''}{player.name}!”</small></div>{countdown && <div className="recording-countdown" role="status" aria-live="assertive"><strong key={countdown}>{countdown}</strong><span>{countdown === 'GO' ? 'Wait for the ding…' : 'Get ready'}</span></div>}{recording && <div className="recording-live" role="status"><span aria-hidden="true" />Recording</div>}<div className="walkup-intro-actions"><button type="button" className="button-secondary" disabled={busy} onClick={onRecord}><Icon name={recording ? 'stop' : 'microphone'} size={16} />{recording ? 'Stop recording' : intro ? 'Record again' : 'Record intro'}</button><label className="button-secondary"><Icon name="upload" size={15} />Upload intro<input type="file" accept="audio/*,.mp3,.m4a,.mp4,.aac,.wav,.webm,.ogg" disabled={busy || recording} onChange={onIntroUpload} /></label></div></div>
+    <div className="walkup-clip-heading"><span className="walkup-clip-icon"><Icon name="music" size={18} /></span><span><h2 id="walkup-clip-title">Walk-up clip</h2><small>{track.title}</small></span></div>
     <label className="walkup-range"><span><strong>Song starts at</strong><output>{time(start)}</output></span><input type="range" min="0" max={maxStart} step="0.5" value={start} onChange={event => onStart(clampClip(track, event.target.value, duration))} /></label>
     <label className="walkup-range"><span><strong>Clip length</strong><output>{Math.round(duration)} sec</output></span><input type="range" min="3" max={maxDuration} step="1" value={duration} onChange={event => onDuration(clampClip(track, start, event.target.value))} /></label>
     <p className="walkup-clip-summary">Plays {time(start)}–{time(start + duration)} with a smooth fade in and fade out.</p>
-    <button type="button" className="walkup-preview button-secondary" disabled={busy || !intro} onClick={onPreview}><Icon name={playing ? 'stop' : 'play'} size={16} />{playing ? 'Stop preview' : 'Preview intro + clip'}</button>
-    <button type="button" className="sheet-save button-primary" disabled={busy || !intro} onClick={onSave}><Icon name="save" size={16} />{busy ? 'Saving…' : 'Save Walk-up'}</button>
+    <button type="button" className="walkup-preview button-secondary" disabled={busy || previewDisabled} onClick={onPreview}><Icon name={playing ? 'stop' : 'play'} size={16} />{playing ? 'Stop preview' : 'Preview walk-up'}</button>
   </section>
 }
 export function MusicDrawer({ api, target, player, onClose, onAssigned }) {
@@ -79,6 +83,11 @@ export function MusicDrawer({ api, target, player, onClose, onAssigned }) {
   const [introTrackId, setIntroTrackId] = useState(null)
   const [recording, setRecording] = useState(false)
   const [recordingCountdown, setRecordingCountdown] = useState(null)
+  const [announcerEnabled, setAnnouncerEnabled] = useState(false)
+  const [musicEnabled, setMusicEnabled] = useState(false)
+  const [announcerOpen, setAnnouncerOpen] = useState(true)
+  const [musicOpen, setMusicOpen] = useState(true)
+  const [getMusicOpen, setGetMusicOpen] = useState(false)
   const active = useRef(true)
   const preview = useRef(null)
   const introPreview = useRef(null)
@@ -100,10 +109,11 @@ export function MusicDrawer({ api, target, player, onClose, onAssigned }) {
         const assignment = entries[0]
         const id = assignmentId(assignment)
         const track = data.tracks.find(item => item.id === id)
+        const nextIntroId = typeof assignment === 'object' ? assignment.introId || null : null
+        setIntroTrackId(nextIntroId); setAnnouncerEnabled(!!nextIntroId); setMusicEnabled(!!track)
         if (track) {
           const clip = clampClip(track, typeof assignment === 'object' ? assignment.start : 0, typeof assignment === 'object' ? assignment.duration : 15)
           setClipTrackId(id); setClipStart(clip.start); setClipDuration(clip.duration)
-          setIntroTrackId(typeof assignment === 'object' ? assignment.introId || null : null)
         }
       }
     } }).catch(e => { if (active.current) setError(e.message) })
@@ -172,7 +182,8 @@ export function MusicDrawer({ api, target, player, onClose, onAssigned }) {
         else if (!entries.length) setClipTrackId(null)
         onAssigned(entries.map(entry => {
           const item = data.tracks.find(track => track.id === assignmentId(entry))
-          return item && typeof entry === 'object' ? { ...item, clipStart: entry.start, clipDuration: entry.duration } : item
+          const intro = typeof entry === 'object' && entry.introId ? data.tracks.find(track => track.id === entry.introId) : null
+          return typeof entry === 'object' && (item || intro) ? { ...(item || { id: null, title: 'Announcer intro', artist: '', status: 'ready' }), clipStart: entry.start, clipDuration: entry.duration, intro } : item
         }).filter(Boolean))
         setNotice(`${track.title} was deleted from Your music.`)
       }
@@ -305,7 +316,8 @@ export function MusicDrawer({ api, target, player, onClose, onAssigned }) {
         }
         onAssigned(entries.map(entry => {
           const track = library.tracks.find(item => item.id === assignmentId(entry))
-          return track && typeof entry === 'object' ? { ...track, clipStart: entry.start, clipDuration: entry.duration } : track
+          const intro = typeof entry === 'object' && entry.introId ? library.tracks.find(item => item.id === entry.introId) : null
+          return typeof entry === 'object' && (track || intro) ? { ...(track || { id: null, title: 'Announcer intro', artist: '', status: 'ready' }), clipStart: entry.start, clipDuration: entry.duration, intro } : track
         }).filter(Boolean))
         closeDrawer()
       }
@@ -327,24 +339,26 @@ export function MusicDrawer({ api, target, player, onClose, onAssigned }) {
     introElement.pause(); element.pause(); element.volume = 1
     setPlayingTrackId(null); setClipPlaying(true); setError('')
     try {
-      const intro = library.tracks.find(item => item.id === introTrackId)
-      if (!intro) throw new Error('Record or upload the announcer intro first.')
-      const [introPlayback, songPlayback] = await Promise.all([api(`/${intro.id}/play`, {}), api(`/${track.id}/play`, {})])
+      const intro = announcerEnabled ? library.tracks.find(item => item.id === introTrackId) : null
+      if (announcerEnabled && !intro) throw new Error('Record or upload the announcer intro first.')
+      const [introPlayback, songPlayback] = await Promise.all([intro ? api(`/${intro.id}/play`, {}) : null, api(`/${track.id}/play`, {})])
       if (!active.current || sequence !== previewSequence.current) return
-      introElement.src = introPlayback.url
-      introElement.load()
-      if (introElement.readyState < 1) await new Promise((resolve, reject) => {
-        const ready = () => { cleanup(); resolve() }
-        const failed = () => { cleanup(); reject(new Error('The clip could not be loaded.')) }
-        const cleanup = () => { introElement.removeEventListener('loadedmetadata', ready); introElement.removeEventListener('error', failed) }
-        introElement.addEventListener('loadedmetadata', ready); introElement.addEventListener('error', failed)
-      })
-      if (!active.current || sequence !== previewSequence.current) return
-      introElement.volume = 1
-      await introElement.play()
-      const introDuration = Number.isFinite(introElement.duration) ? introElement.duration : Number(intro.duration) || 0
-      await new Promise(resolve => setTimeout(resolve, Math.max(0, introDuration - .9) * 1000))
-      if (!active.current || sequence !== previewSequence.current) return
+      if (intro) {
+        introElement.src = introPlayback.url
+        introElement.load()
+        if (introElement.readyState < 1) await new Promise((resolve, reject) => {
+          const ready = () => { cleanup(); resolve() }
+          const failed = () => { cleanup(); reject(new Error('The clip could not be loaded.')) }
+          const cleanup = () => { introElement.removeEventListener('loadedmetadata', ready); introElement.removeEventListener('error', failed) }
+          introElement.addEventListener('loadedmetadata', ready); introElement.addEventListener('error', failed)
+        })
+        if (!active.current || sequence !== previewSequence.current) return
+        introElement.volume = 1
+        await introElement.play()
+        const introDuration = Number.isFinite(introElement.duration) ? introElement.duration : Number(intro.duration) || 0
+        await new Promise(resolve => setTimeout(resolve, Math.max(0, introDuration - .9) * 1000))
+        if (!active.current || sequence !== previewSequence.current) return
+      }
       loadedPreviewId.current = track.id
       element.src = songPlayback.url
       element.load()
@@ -398,6 +412,55 @@ export function MusicDrawer({ api, target, player, onClose, onAssigned }) {
   }
   const team = target === 'team'
   const songTracks = library?.tracks.filter(track => track.kind !== 'intro') || []
+  const introTrack = library?.tracks.find(track => track.id === introTrackId)
+  const clipTrack = library?.tracks.find(track => track.id === clipTrackId)
+  const saveWalkup = () => {
+    if (!announcerEnabled && !musicEnabled) return assign([])
+    const entry = {
+      ...(musicEnabled ? { id: clipTrackId, start: clipStart, duration: clipDuration } : {}),
+      ...(announcerEnabled ? { introId: introTrackId } : {}),
+    }
+    return assign([entry])
+  }
+  const playerReady = (!announcerEnabled || !!introTrackId) && (!musicEnabled || !!clipTrackId) && (announcerEnabled || musicEnabled)
+  if (!team) return <><Modal className={`music-drawer walkup-drawer${closing ? ' closing' : ''}`} title="Walk-up" onClose={closeDrawer}>
+    <p>Build {player.name}’s announcer intro and entrance music.</p>
+    {error && <p className="validation" role="alert">{error} <button type="button" onClick={() => setRetry(n => n + 1)}>Retry</button></p>}
+    {notice && <p role="status">{notice}</p>}
+    {!library ? <p role="status">Loading your music library…</p> : <div className="walkup-sections">
+      <section className={`walkup-section${announcerOpen ? ' open' : ''}`}>
+        <SectionToggle label="Announcer" checked={announcerEnabled} open={announcerOpen} onToggle={() => setAnnouncerEnabled(value => !value)} onOpen={() => setAnnouncerOpen(value => !value)} />
+        {announcerOpen && <div className="walkup-section-body"><AnnouncerEditor player={player} intro={introTrack} recording={recording} countdown={recordingCountdown} busy={busy} onRecord={toggleRecording} onIntroUpload={uploadIntro} /></div>}
+      </section>
+      <section className={`walkup-section${musicOpen ? ' open' : ''}`}>
+        <SectionToggle label="Music" checked={musicEnabled} open={musicOpen} onToggle={() => setMusicEnabled(value => !value)} onOpen={() => setMusicOpen(value => !value)} />
+        {musicOpen && <div className="walkup-section-body">
+          <div className="walkup-subhead"><h2>Get Music</h2><button type="button" className="walkup-add-music" aria-label={`${getMusicOpen ? 'Hide' : 'Show'} music search and upload`} aria-expanded={getMusicOpen} onClick={() => setGetMusicOpen(value => !value)}><Icon name={getMusicOpen ? 'close' : 'plus'} size={18} /></button></div>
+          {getMusicOpen && <div className="walkup-get-music">
+            {!library.configured && <p role="status">Music imports will be available once the Google music service is connected.</p>}
+            <label htmlFor="music-search">SEARCH MUSIC</label><input id="music-search" type="search" placeholder="Song or artist" maxLength={100} value={query} disabled={!library.configured} onChange={e => { setQuery(e.target.value); setSearchPreview(null) }} />
+            <label className={`music-upload${busy ? ' disabled' : ''}`}><Icon name="upload" size={28} /><span><strong>{busy ? 'Working…' : 'Upload music'}</strong><small>MP3, M4A, AAC, or WAV · up to 50 MB</small></span><input type="file" accept=".mp3,.m4a,.mp4,.aac,.wav,audio/mpeg,audio/mp4,audio/aac,audio/wav" disabled={busy} onChange={uploadSong} /></label>
+            {searching && <p role="status">Searching…</p>}
+            {!searching && query.trim().length >= 3 && library.configured && results.length === 0 && <p>No results. Try another song or artist.</p>}
+            <div className="music-results">{results.map(result => {
+              const track = library.tracks.find(t => t.videoId === result.videoId)
+              const previewing = searchPreview?.videoId === result.videoId
+              const importLabel = track?.status === 'ready' ? 'In library' : track && track.status !== 'failed' ? 'Importing…' : track ? 'Retry import' : 'Import song'
+              return <React.Fragment key={result.videoId}><article className={`music-result${previewing ? ' previewing' : ''}`} tabIndex="0" aria-label={`${previewing ? 'Play' : 'Preview'} ${result.title}`} onClick={() => previewResult(result)} onKeyDown={event => { if ((event.key === 'Enter' || event.key === ' ') && event.target === event.currentTarget) { event.preventDefault(); previewResult(result) } }}><span className="music-result-thumbnail" aria-hidden="true"><img src={result.thumbnail} alt="" loading="lazy" /><span className="music-result-play-cue"><Icon name="play" size={11} /></span></span><div><strong>{result.title} {result.isExplicit === true && <span className="music-explicit" aria-label="Explicit content" title="Explicit content">E</span>}</strong><small>{result.artist} {time(result.duration)}</small>{result.album && <small>{result.album}</small>}</div><button type="button" className="music-import-button button-secondary" title={importLabel} aria-label={`${importLabel}: ${result.title}`} disabled={busy || !!track && track.status !== 'failed'} onClick={event => { event.stopPropagation(); setConfirmation({ type: 'import', track: result }) }}><Icon name="cloudArrowDown" size={16} /></button></article>{previewing && <section className="music-search-preview" aria-label={`Previewing ${result.title}`}><div className="music-search-preview-heading"><span><strong>{result.title}</strong>{result.artist && <small>{result.artist}</small>}</span><button type="button" className="close" onClick={() => setSearchPreview(null)} aria-label="Close preview"><Icon name="close" size={14} /></button></div><iframe ref={searchPreviewFrame} src={`https://www.youtube.com/embed/${encodeURIComponent(result.videoId)}?autoplay=1&playsinline=1&rel=0&enablejsapi=1&origin=${encodeURIComponent(window.location.origin)}&widget_referrer=${encodeURIComponent(window.location.href)}`} title={`Preview ${result.title}`} allow="autoplay; encrypted-media; picture-in-picture" referrerPolicy="origin-when-cross-origin" onLoad={event => playSearchPreview(event.currentTarget)} allowFullScreen /><small className="music-preview-help">If your iPhone blocks automatic playback, tap the play button once.</small></section>}</React.Fragment>
+            })}</div>
+          </div>}
+          <h2 className="music-library-heading">Your Music</h2>
+          {!songTracks.length && <p>Use + above to search for or upload your first song.</p>}
+          {songTracks.map(track => <article key={track.id} className={`music-library-track${clipTrackId === track.id ? ' selected' : ''}`}><div><strong>{track.title}</strong><small>{track.artist} {time(track.duration)}{track.status !== 'ready' && ` · ${track.status}`}</small>{track.status === 'failed' && <small>{track.error}</small>}</div>{track.status === 'ready' ? <><button type="button" className={`music-preview button-tertiary${playingTrackId === track.id ? ' playing' : ''}`} aria-label={`${playingTrackId === track.id ? 'Pause' : 'Play'} ${track.title}`} onClick={() => listen(track)}><Icon name={playingTrackId === track.id ? 'pause' : 'play'} size={14} /></button><button type="button" className="button-secondary" disabled={busy} onClick={() => { chooseClip(track); setMusicEnabled(true) }}>{clipTrackId === track.id ? 'Selected' : 'Select'}</button></> : track.status === 'failed' ? <button type="button" className="button-secondary" disabled={busy} onClick={() => setConfirmation({ type: 'import', track })}>Retry</button> : <span className="music-pending" role="status">Importing…</span>}{['ready', 'failed'].includes(track.status) && <button type="button" className="music-delete-button" disabled={busy} aria-label={`Delete ${track.title} from Your music`} onClick={() => setConfirmation({ type: 'delete', track })}><Icon name="trash" size={15} /></button>}</article>)}
+          {musicEnabled && <WalkupClipEditor track={clipTrack} start={clipStart} duration={clipDuration} playing={clipPlaying} busy={busy} previewDisabled={!playerReady} onStart={clip => { setClipStart(clip.start); setClipDuration(clip.duration) }} onDuration={clip => setClipDuration(clip.duration)} onPreview={() => previewWalkup(clipTrack)} />}
+        </div>}
+      </section>
+      <button type="button" className="sheet-save button-primary" disabled={busy || !playerReady} onClick={saveWalkup}><Icon name="save" size={16} />{busy ? 'Saving…' : 'Save Walk-up'}</button>
+      <button type="button" className="drawer-cancel button-secondary" disabled={busy} onClick={closeDrawer}>Cancel</button>
+      {(player.song || introTrackId || clipTrackId) && <button type="button" className="remove-song" disabled={busy} onClick={() => assign([])}>Remove walk-up</button>}
+    </div>}
+    <audio ref={introPreview} hidden aria-hidden="true" /><audio ref={preview} className="music-audio-preview" aria-hidden="true" onEnded={() => setPlayingTrackId(null)} onError={() => { setPlayingTrackId(null); setClipPlaying(false); setError('Preview could not play. Try again.') }} />
+  </Modal>{confirmation && <Modal className="music-confirm-dialog" iconName={confirmation.type === 'delete' ? 'trash' : 'cloudArrowDown'} title={confirmation.type === 'delete' ? 'Delete this song?' : 'Import this song?'} onClose={() => setConfirmation(null)}><p>{confirmation.type === 'delete' ? <>Delete <strong>“{confirmation.track.title}”</strong> from Your music? This removes the stored audio and clears it from every player and team playlists.</> : <>Import <strong>“{confirmation.track.title}”</strong> to Your music? KingSports will download and store a private copy for your team.</>}</p><div className="music-confirm-actions"><button type="button" className="button-tertiary" onClick={() => setConfirmation(null)}>Cancel</button><button type="button" className={confirmation.type === 'delete' ? 'music-confirm-delete' : 'button-primary'} onClick={() => { const action = confirmation; setConfirmation(null); if (action.type === 'delete') deleteSong(action.track); else importSong(action.track.videoId) }}>{confirmation.type === 'delete' ? 'Delete song' : 'Import song'}</button></div></Modal>}</>
   return <><Modal className={`music-drawer${closing ? ' closing' : ''}`} title={team ? 'Find Music' : 'Walk-up music'} onClose={closeDrawer}>
     <p>{team ? 'Full songs for pregame, postgame, and between innings.' : `Choose the entrance song for ${player.name}.`}</p>
     {error && <p className="validation" role="alert">{error} <button type="button" onClick={() => setRetry(n => n + 1)}>Retry</button></p>}

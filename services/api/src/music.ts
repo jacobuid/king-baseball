@@ -6,7 +6,7 @@ export interface MusicEnv {
   MUSIC_SERVICE_URL: string; MUSIC_SERVICE_TOKEN: string
 }
 type Track = { id: string; owner_user_id: string; video_id: string; title: string; artist: string; status: string; object_key: string; content_type: string; duration: number | null; error: string | null; kind: 'song' | 'intro' }
-type PlayerAssignment = { id: string; start: number; duration: number; introId?: string }
+type PlayerAssignment = { id?: string; start?: number; duration?: number; introId?: string }
 const json = (data: unknown, status = 200) => Response.json(data, { status, headers: { 'Cache-Control': 'no-store' } })
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const publicTrack = (row: Track) => ({ id: row.id, videoId: row.video_id, title: row.title, artist: row.artist, status: row.status, duration: row.duration, error: row.error, kind: row.kind || 'song' })
@@ -134,17 +134,18 @@ export async function handleMusicRequest(request: Request, env: MusicEnv, userId
     const teamEntries = body.target === 'team' ? body.tracks : []
     const playerEntries = body.target === 'team' ? [] : body.tracks
     if (teamEntries.some(id => typeof id !== 'string' || !uuid.test(id)) || new Set(teamEntries).size !== teamEntries.length) return json({ error: 'Invalid track list' }, 400)
-    if (playerEntries.some(entry => typeof entry !== 'object' || entry === null || !uuid.test((entry as PlayerAssignment).id) || !Number.isFinite((entry as PlayerAssignment).start) || !Number.isFinite((entry as PlayerAssignment).duration))) return json({ error: 'Choose a valid walk-up clip' }, 400)
-    const normalized: (string | PlayerAssignment)[] = body.target === 'team' ? teamEntries as string[] : playerEntries.map(entry => ({ id: (entry as PlayerAssignment).id, start: Math.round((entry as PlayerAssignment).start * 10) / 10, duration: Math.round((entry as PlayerAssignment).duration * 10) / 10, ...((entry as PlayerAssignment).introId ? { introId: (entry as PlayerAssignment).introId } : {}) }))
+    if (playerEntries.some(entry => { const value = entry as PlayerAssignment; return typeof entry !== 'object' || entry === null || (!value.id && !value.introId) || (!!value.id && (!uuid.test(value.id) || !Number.isFinite(value.start) || !Number.isFinite(value.duration))) || (!!value.introId && !uuid.test(value.introId)) })) return json({ error: 'Choose a valid walk-up' }, 400)
+    const normalized: (string | PlayerAssignment)[] = body.target === 'team' ? teamEntries as string[] : playerEntries.map(entry => { const value = entry as PlayerAssignment; return { ...(value.id ? { id: value.id, start: Math.round(value.start! * 10) / 10, duration: Math.round(value.duration! * 10) / 10 } : {}), ...(value.introId ? { introId: value.introId } : {}) } })
     for (const entry of normalized) {
       const id = typeof entry === 'string' ? entry : entry.id
-      const owned = await env.DB.prepare("SELECT id,duration,kind FROM music_tracks WHERE id=? AND owner_user_id=? AND status='ready'").bind(id, userId).first<{ id: string; duration: number | null; kind: string }>()
-      if (!owned) return json({ error: 'Choose an imported song from your library' }, 400)
-      if (typeof entry !== 'string' && (owned.kind !== 'song' || entry.start < 0 || entry.duration < 3 || entry.duration > 60 || !owned.duration || entry.start + entry.duration > owned.duration + .25)) return json({ error: 'Choose a clip between 3 and 60 seconds within the song' }, 400)
+      const owned = id ? await env.DB.prepare("SELECT id,duration,kind FROM music_tracks WHERE id=? AND owner_user_id=? AND status='ready'").bind(id, userId).first<{ id: string; duration: number | null; kind: string }>() : null
+      if (id && !owned) return json({ error: 'Choose an imported song from your library' }, 400)
+      if (typeof entry !== 'string' && id && (owned!.kind !== 'song' || entry.start! < 0 || entry.duration! < 3 || entry.duration! > 60 || !owned!.duration || entry.start! + entry.duration! > owned!.duration + .25)) return json({ error: 'Choose a clip between 3 and 60 seconds within the song' }, 400)
       if (typeof entry !== 'string') {
-        if (!entry.introId || !uuid.test(entry.introId)) return json({ error: 'Record or upload an announcer intro' }, 400)
-        const intro = await env.DB.prepare("SELECT id FROM music_tracks WHERE id=? AND owner_user_id=? AND status='ready' AND kind='intro'").bind(entry.introId, userId).first()
-        if (!intro) return json({ error: 'Record or upload a valid announcer intro' }, 400)
+        if (entry.introId) {
+          const intro = await env.DB.prepare("SELECT id FROM music_tracks WHERE id=? AND owner_user_id=? AND status='ready' AND kind='intro'").bind(entry.introId, userId).first()
+          if (!intro) return json({ error: 'Record or upload a valid announcer intro' }, 400)
+        }
       }
     }
     await env.DB.prepare('INSERT INTO music_assignments(owner_user_id,target,tracks_json) VALUES(?,?,?) ON CONFLICT(owner_user_id,target) DO UPDATE SET tracks_json=excluded.tracks_json').bind(userId, body.target, JSON.stringify(normalized)).run()
@@ -165,8 +166,8 @@ export async function handleMusicRequest(request: Request, env: MusicEnv, userId
       const filtered = tracks.map<unknown>(entry => {
         if (typeof entry === 'string') return entry === track.id ? null : entry
         const value = entry as PlayerAssignment
-        if (value.id === track.id) return null
-        return value.introId === track.id ? { ...value, introId: undefined } : value
+        if (value.id === track.id) return value.introId ? { introId: value.introId } : null
+        return value.introId === track.id ? (value.id ? { ...value, introId: undefined } : null) : value
       }).filter(entry => entry !== null)
       if (JSON.stringify(filtered) !== JSON.stringify(tracks)) await env.DB.prepare('UPDATE music_assignments SET tracks_json=? WHERE owner_user_id=? AND target=?').bind(JSON.stringify(filtered), userId, assignment.target).run()
     }

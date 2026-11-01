@@ -21,7 +21,7 @@ export function mergeMusic(team, local, music) {
     const id = typeof assignment === 'string' ? assignment : assignment?.id
     const track = id ? byId.get(id) : null
     const intro = typeof assignment === 'object' && assignment.introId ? byId.get(assignment.introId) : null
-    const song = track ? { ...track, clipStart: typeof assignment === 'object' ? assignment.start : 0, clipDuration: typeof assignment === 'object' ? assignment.duration : Math.min(15, track.duration || 15), intro: intro || null } : null
-    return { ...player, song: song || (Object.hasOwn(music.assignments, player.id) ? null : local?.players?.find(p => p.id === player.id)?.song || null) }
+    const walkup = track || intro ? { ...(track || { id: null, title: 'Announcer intro', artist: '', status: 'ready', duration: 0 }), clipStart: track && typeof assignment === 'object' ? assignment.start : 0, clipDuration: track && typeof assignment === 'object' ? assignment.duration : Math.min(15, track?.duration || 15), intro: intro || null } : null
+    return { ...player, song: walkup || (Object.hasOwn(music.assignments, player.id) ? null : local?.players?.find(p => p.id === player.id)?.song || null) }
   }) }
 }
