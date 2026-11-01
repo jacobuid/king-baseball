@@ -2,7 +2,7 @@ import os
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, call, patch
 
 from fastapi.testclient import TestClient
 import requests
@@ -73,28 +73,27 @@ class MusicTests(unittest.TestCase):
 
     @patch.object(service, "YTMusic")
     def test_music_search_maps_metadata_and_excludes_unavailable_and_long_tracks(self, client):
-        client.return_value.search.return_value = [
+        client.return_value.search.side_effect = [[
             {"videoId": "abcdefghijk", "title": "Song", "duration_seconds": 120, "artists": [{"name": "Artist"}], "album": {"name": "Album"}, "isExplicit": True, "thumbnails": [{"url": "https://lh3.googleusercontent.com/artwork"}]},
             {"videoId": "abcdefghijk", "duration_seconds": 120},
             {"videoId": "ABCDEFGHIJK", "duration_seconds": 9000},
             {"videoId": "01234567890", "duration_seconds": 120, "isAvailable": False},
             {"videoId": "invalid", "duration_seconds": 120},
-        ]
+        ], [{"videoId": "abcdefghijk", "title": "Duplicate video", "duration_seconds": 120}]]
         response = self.client.post("/search", json={"query": "--exec evil"}, headers=self.headers)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["results"], [{"videoId": "abcdefghijk", "title": "Song", "artist": "Artist", "album": "Album", "isExplicit": True, "duration": 120, "thumbnail": "https://lh3.googleusercontent.com/artwork"}])
-        client.return_value.search.assert_called_once_with("--exec evil", filter="songs", limit=8)
+        self.assertEqual(client.return_value.search.call_args_list, [call("--exec evil", filter="songs", limit=8), call("--exec evil", filter="videos", limit=8)])
         self.assertNotIn("auth", client.call_args.kwargs)
 
     @patch.object(service, "YTMusic")
-    def test_video_search_handles_missing_metadata_and_rejects_bad_filter(self, client):
-        client.return_value.search.return_value = [{"videoId": "abcdefghijk", "duration_seconds": 120, "thumbnails": [{"url": "https://unrelated.example/image"}]}]
-        response = self.client.post("/search", json={"query": "song", "type": "videos"}, headers=self.headers)
+    def test_combined_search_includes_video_results_with_missing_metadata(self, client):
+        client.return_value.search.side_effect = [[], [{"videoId": "abcdefghijk", "duration_seconds": 120, "thumbnails": [{"url": "https://unrelated.example/image"}]}]]
+        response = self.client.post("/search", json={"query": "song"}, headers=self.headers)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["results"][0]["thumbnail"], "https://i.ytimg.com/vi/abcdefghijk/mqdefault.jpg")
         self.assertIsNone(response.json()["results"][0]["isExplicit"])
-        client.return_value.search.assert_called_once_with("song", filter="videos", limit=8)
-        self.assertEqual(self.client.post("/search", json={"query": "song", "type": "uploads"}, headers=self.headers).status_code, 422)
+        self.assertEqual(client.return_value.search.call_args_list, [call("song", filter="songs", limit=8), call("song", filter="videos", limit=8)])
 
     @patch.object(service, "YTMusic")
     def test_upstream_music_search_failure_is_reported(self, client):

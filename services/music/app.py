@@ -6,7 +6,6 @@ import os
 import re
 import subprocess
 import tempfile
-from typing import Literal
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -83,7 +82,6 @@ def youtube_cookie_arguments(directory):
 
 class Search(BaseModel):
     query: str = Field(min_length=3, max_length=100)
-    type: Literal["songs", "videos"] = "songs"
 
 
 class MusicSession(requests.Session):
@@ -131,7 +129,11 @@ def search(body: Search):
     try:
         # Each request has an anonymous client/session; no account cookies are used.
         with MusicSession() as session:
-            entries = YTMusic(requests_session=session).search(body.query.strip(), filter=body.type, limit=8)
+            client = YTMusic(requests_session=session)
+            entries = [
+                *client.search(body.query.strip(), filter="songs", limit=8),
+                *client.search(body.query.strip(), filter="videos", limit=8),
+            ]
         results = []
         seen = set()
         for entry in entries:
@@ -139,7 +141,7 @@ def search(body: Search):
             if result and result["videoId"] not in seen:
                 results.append(result)
                 seen.add(result["videoId"])
-            if len(results) == 8:
+            if len(results) == 12:
                 break
         return {"results": results}
     except (YTMusicError, requests.RequestException, ValueError, KeyError, IndexError):

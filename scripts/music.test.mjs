@@ -91,16 +91,15 @@ test('callback requires service token and verifies object upload before ready', 
   } finally { globalThis.fetch = original; sqlite.close() }
 })
 
-test('search forwards the selected music category and rejects unsupported categories', async () => {
+test('search requests a combined result list from the music service', async () => {
   const { env, sqlite } = setup()
   const original = globalThis.fetch
   globalThis.fetch = async (_url, options) => {
-    assert.deepEqual(JSON.parse(options.body), { query: 'Artist Song', type: 'videos' })
+    assert.deepEqual(JSON.parse(options.body), { query: 'Artist Song' })
     return Response.json({ results: [] })
   }
   try {
-    assert.equal((await handleMusicRequest(request('/api/music/search?q=Artist%20Song&type=uploads'), env, 'alice')).status, 400)
-    assert.equal((await handleMusicRequest(request('/api/music/search?q=Artist%20Song&type=videos'), env, 'alice')).status, 200)
+    assert.equal((await handleMusicRequest(request('/api/music/search?q=Artist%20Song'), env, 'alice')).status, 200)
   } finally { globalThis.fetch = original; sqlite.close() }
 })
 

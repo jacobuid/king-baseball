@@ -5,7 +5,6 @@ const time = seconds => Number.isFinite(seconds) ? `${Math.floor(seconds / 60)}:
 export function MusicDrawer({ api, target, player, onClose, onAssigned }) {
   const [library, setLibrary] = useState(null)
   const [query, setQuery] = useState('')
-  const [searchType, setSearchType] = useState('songs')
   const [results, setResults] = useState([])
   const [searching, setSearching] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -38,10 +37,10 @@ export function MusicDrawer({ api, target, player, onClose, onAssigned }) {
     setSearching(true)
     setResults([])
     const timer = setTimeout(() => {
-      api(`/search?q=${encodeURIComponent(query.trim())}&type=${searchType}`).then(data => { if (current) { setResults(data.results || []); setError('') } }).catch(e => { if (current) setError(e.message) }).finally(() => { if (current) setSearching(false) })
+      api(`/search?q=${encodeURIComponent(query.trim())}`).then(data => { if (current) { setResults(data.results || []); setError('') } }).catch(e => { if (current) setError(e.message) }).finally(() => { if (current) setSearching(false) })
     }, 1600)
     return () => { current = false; clearTimeout(timer) }
-  }, [api, query, searchType, library?.configured])
+  }, [api, query, library?.configured])
   useEffect(() => {
     if (!library?.tracks.some(track => ['queued', 'processing'].includes(track.status))) return
     let current = true
@@ -89,7 +88,6 @@ export function MusicDrawer({ api, target, player, onClose, onAssigned }) {
     {!library ? <p role="status">Loading your music library…</p> : <>
       {!library.configured && <p role="status">Music imports will be available once the Google music service is connected.</p>}
       <label htmlFor="music-search">SEARCH MUSIC</label><input id="music-search" type="search" placeholder="Song or artist" maxLength={100} value={query} disabled={!library.configured} onChange={e => setQuery(e.target.value)} />
-      <div className="music-search-types" role="group" aria-label="Search category">{['songs', 'videos'].map(type => <button key={type} type="button" aria-pressed={searchType === type} disabled={!library.configured} onClick={() => setSearchType(type)}>{type === 'songs' ? 'Songs' : 'Videos'}</button>)}</div>
       {searching && <p role="status">Searching…</p>}
       {!searching && query.trim().length >= 3 && library.configured && results.length === 0 && <p>No results. Try another song or artist.</p>}
       <div className="music-results">{results.map(result => {
