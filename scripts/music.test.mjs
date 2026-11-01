@@ -11,6 +11,7 @@ const player = '33333333-3333-4333-8333-333333333333'
 function setup() {
   const sqlite = new DatabaseSync(':memory:')
   sqlite.exec(readFileSync(new URL('../services/api/migrations/0008_music.sql', import.meta.url), 'utf8'))
+  sqlite.exec(readFileSync(new URL('../services/api/migrations/0009_music_uploads.sql', import.meta.url), 'utf8'))
   const env = { DB: { prepare(sql) {
     let args = []
     return { bind(...values) { args = values; return this }, async first() { return sqlite.prepare(sql).get(...args) || null }, async all() { return { results: sqlite.prepare(sql).all(...args) } }, async run() { return sqlite.prepare(sql).run(...args) } }
@@ -71,6 +72,30 @@ test('imports validate IDs, deduplicate, recover queue failures, and throttle se
     globalThis.fetch = async () => Response.json({ results: [] })
     assert.equal((await handleMusicRequest(request('/api/music/search?q=test'), env, 'alice')).status, 200)
     assert.equal((await handleMusicRequest(request('/api/music/search?q=test'), env, 'alice')).status, 429)
+  } finally { globalThis.fetch = original; sqlite.close() }
+})
+
+test('uploaded audio joins the same private library and keeps its playback type', async () => {
+  const { env, sqlite } = setup()
+  const original = globalThis.fetch
+  try {
+    const response = await handleMusicRequest(request('/api/music/upload', { title: 'My Song', contentType: 'audio/mpeg', size: 4096, duration: 125 }), env, 'alice')
+    assert.equal(response.status, 201)
+    const created = await response.json()
+    assert.match(created.uploadUrl, /^https:\/\//)
+    assert.equal(created.track.title, 'My Song')
+    const stored = sqlite.prepare('SELECT * FROM music_tracks WHERE id=?').get(created.track.id)
+    assert.equal(stored.owner_user_id, 'alice')
+    assert.equal(stored.status, 'processing')
+    assert.equal(stored.content_type, 'audio/mpeg')
+    assert.match(stored.object_key, /\.mp3$/)
+    assert.equal((await handleMusicRequest(request(`/api/music/upload/${created.track.id}/complete`, {}), env, 'bob')).status, 404)
+    globalThis.fetch = async () => new Response(null, { status: 200, headers: { 'Content-Length': '4096' } })
+    const completed = await handleMusicRequest(request(`/api/music/upload/${created.track.id}/complete`, {}), env, 'alice')
+    assert.equal(completed.status, 200)
+    assert.equal((await completed.json()).track.status, 'ready')
+    assert.equal(sqlite.prepare('SELECT status FROM music_tracks WHERE id=?').get(created.track.id).status, 'ready')
+    assert.equal((await handleMusicRequest(request('/api/music/upload', { title: 'Bad', contentType: 'text/plain', size: 10, duration: 10 }), env, 'alice')).status, 400)
   } finally { globalThis.fetch = original; sqlite.close() }
 })
 

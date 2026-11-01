@@ -27,8 +27,8 @@ let bucket = listed.buckets?.find(item => item.bucketName === bucketName)
 const corsRules = [{
   corsRuleName: 'kingSportsWebPlayback',
   allowedOrigins: [webOrigin],
-  allowedHeaders: ['range'],
-  allowedOperations: ['b2_download_file_by_id', 'b2_download_file_by_name', 's3_get', 's3_head'],
+  allowedHeaders: ['content-type', 'range'],
+  allowedOperations: ['b2_download_file_by_id', 'b2_download_file_by_name', 's3_get', 's3_head', 's3_put'],
   exposeHeaders: ['content-length', 'content-range', 'content-type'],
   maxAgeSeconds: 3600,
 }]

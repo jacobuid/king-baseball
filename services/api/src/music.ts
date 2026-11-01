@@ -5,13 +5,14 @@ export interface MusicEnv {
   B2_MUSIC_KEY_ID: string; B2_MUSIC_APPLICATION_KEY: string
   MUSIC_SERVICE_URL: string; MUSIC_SERVICE_TOKEN: string
 }
-type Track = { id: string; owner_user_id: string; video_id: string; title: string; artist: string; status: string; object_key: string; duration: number | null; error: string | null }
+type Track = { id: string; owner_user_id: string; video_id: string; title: string; artist: string; status: string; object_key: string; content_type: string; duration: number | null; error: string | null }
 const json = (data: unknown, status = 200) => Response.json(data, { status, headers: { 'Cache-Control': 'no-store' } })
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const publicTrack = (row: Track) => ({ id: row.id, videoId: row.video_id, title: row.title, artist: row.artist, status: row.status, duration: row.duration, error: row.error })
+const uploadTypes: Record<string, string> = { 'audio/mpeg': 'mp3', 'audio/mp4': 'm4a', 'audio/x-m4a': 'm4a', 'audio/aac': 'aac', 'audio/wav': 'wav', 'audio/x-wav': 'wav' }
 function configured(env: MusicEnv) { return !!(env.MUSIC_SERVICE_URL && env.MUSIC_SERVICE_TOKEN && env.B2_MUSIC_KEY_ID && env.B2_MUSIC_APPLICATION_KEY) }
 function objectUrl(env: MusicEnv, key: string) {
-  if (!/^music\/[a-f0-9-]+\.m4a$/.test(key)) throw new Error('Invalid music key')
+  if (!/^music\/[a-f0-9-]+\.(m4a|mp3|aac|wav)$/.test(key)) throw new Error('Invalid music key')
   return `${env.B2_ENDPOINT.replace(/\/$/, '')}/${env.B2_BUCKET}/${key}`
 }
 function signer(env: MusicEnv) { return new AwsClient({ accessKeyId: env.B2_MUSIC_KEY_ID, secretAccessKey: env.B2_MUSIC_APPLICATION_KEY, service: 's3', region: new URL(env.B2_ENDPOINT).hostname.split('.')[1] }) }
@@ -84,6 +85,44 @@ export async function handleMusicRequest(request: Request, env: MusicEnv, userId
     }
     return json({ track: { id, videoId: body.videoId, title: 'Importing song…', artist: '', status: 'queued' } }, 202)
   }
+  if (path === '/api/music/upload' && request.method === 'POST') {
+    if (!configured(env)) return json({ error: 'Music uploads are not configured yet.' }, 503)
+    const raw = await request.text()
+    if (raw.length > 4096) return json({ error: 'Too large' }, 413)
+    const body = JSON.parse(raw) as { title?: string; artist?: string; contentType?: string; size?: number; duration?: number }
+    const title = body.title?.trim()
+    const artist = body.artist?.trim() || ''
+    const contentType = body.contentType?.toLowerCase() || ''
+    const extension = uploadTypes[contentType]
+    if (!title || title.length > 200 || artist.length > 100) return json({ error: 'Enter a valid song title' }, 400)
+    if (!extension) return json({ error: 'Choose an MP3, M4A, AAC, or WAV audio file' }, 400)
+    if (!Number.isInteger(body.size) || body.size! <= 0 || body.size! > 50 * 1024 * 1024) return json({ error: 'Audio files must be 50 MB or smaller' }, 400)
+    if (!Number.isFinite(body.duration) || body.duration! <= 0 || body.duration! > 1200) return json({ error: 'Audio must be 20 minutes or shorter' }, 400)
+    const id = crypto.randomUUID()
+    const objectKey = `music/${id}.${extension}`
+    const inserted = await env.DB.prepare("INSERT INTO music_tracks(id,owner_user_id,video_id,title,artist,status,object_key,content_type,duration) SELECT ?,?,?,?,?,?,?,?,? WHERE (SELECT count(*) FROM music_tracks WHERE owner_user_id=?) < 500 RETURNING *").bind(id, userId, `upload:${id}`, title, artist, 'processing', objectKey, contentType, body.duration, userId).first<Track>()
+    if (!inserted) return json({ error: 'Music library limit reached' }, 429)
+    try {
+      const signed = await signer(env).sign(`${objectUrl(env, objectKey)}?X-Amz-Expires=900`, { method: 'PUT', headers: { 'Content-Type': contentType }, aws: { signQuery: true } })
+      return json({ track: publicTrack(inserted), uploadUrl: signed.url }, 201)
+    } catch {
+      await env.DB.prepare("UPDATE music_tracks SET status='failed',error='Could not prepare upload.' WHERE id=? AND owner_user_id=?").bind(id, userId).run()
+      return json({ error: 'Could not prepare the upload. Please try again.' }, 502)
+    }
+  }
+  const completeUpload = path.match(/^\/api\/music\/upload\/([a-f0-9-]+)\/complete$/i)
+  if (completeUpload && request.method === 'POST') {
+    const track = await env.DB.prepare("SELECT * FROM music_tracks WHERE id=? AND owner_user_id=? AND video_id=? AND status='processing'").bind(completeUpload[1], userId, `upload:${completeUpload[1]}`).first<Track>()
+    if (!track) return json({ error: 'Upload not found' }, 404)
+    const stored = await signer(env).fetch(objectUrl(env, track.object_key), { method: 'HEAD' })
+    const size = Number(stored.headers.get('Content-Length') || 0)
+    if (!stored.ok || size <= 0 || size > 50 * 1024 * 1024) {
+      await env.DB.prepare("UPDATE music_tracks SET status='failed',error='Audio upload was incomplete.' WHERE id=?").bind(track.id).run()
+      return json({ error: 'Audio upload was incomplete. Please try again.' }, 409)
+    }
+    await env.DB.prepare("UPDATE music_tracks SET status='ready',error=NULL,updated_at=CURRENT_TIMESTAMP WHERE id=? AND owner_user_id=?").bind(track.id, userId).run()
+    return json({ track: publicTrack({ ...track, status: 'ready', error: null }) })
+  }
   if (path === '/api/music/assign' && request.method === 'PUT') {
     const raw = await request.text()
     if (raw.length > 16000) return json({ error: 'Too large' }, 413)
@@ -126,7 +165,7 @@ export async function handleMusicContent(request: Request, env: MusicEnv): Promi
   const range = request.headers.get('Range')
   if (range) { if (!/^bytes=\d*-\d*$/.test(range) || range === 'bytes=-') return new Response(null, { status: 416 }); headers.Range = range }
   const response = await signer(env).fetch(objectUrl(env, track.object_key), { method: request.method, headers })
-  const out = new Headers({ 'Content-Type': 'audio/mp4', 'Cache-Control': 'private, no-store', 'Accept-Ranges': 'bytes' })
+  const out = new Headers({ 'Content-Type': track.content_type || 'audio/mp4', 'Cache-Control': 'private, no-store', 'Accept-Ranges': 'bytes' })
   for (const name of ['Content-Length', 'Content-Range']) { const value = response.headers.get(name); if (value) out.set(name, value) }
   return new Response(response.body, { status: response.status, headers: out })
 }

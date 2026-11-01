@@ -2,7 +2,7 @@ name: API
 on:
   push:
     branches: [main]
-    paths: ['shared/**', 'services/api/**', 'infrastructure/pulumi/**', 'scripts/configure-deployment.mjs', 'scripts/teams.test.mjs', 'scripts/music.test.mjs', 'package.json', 'package-lock.json', '.github/workflows/api.yml']
+    paths: ['shared/**', 'services/api/**', 'infrastructure/pulumi/**', 'scripts/configure-deployment.mjs', 'scripts/configure-b2-cors.mjs', 'scripts/teams.test.mjs', 'scripts/music.test.mjs', 'package.json', 'package-lock.json', '.github/workflows/api.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -51,5 +51,12 @@ jobs:
           WEB_ORIGIN: https://${{ github.repository_owner }}.github.io
           B2_BOOTSTRAP_KEY_ID: ${{ secrets.B2_BOOTSTRAP_KEY_ID }}
           B2_BOOTSTRAP_APPLICATION_KEY: ${{ secrets.B2_BOOTSTRAP_APPLICATION_KEY }}
+      - name: Configure Backblaze browser uploads
+        run: node scripts/configure-b2-cors.mjs
+        env:
+          B2_BOOTSTRAP_KEY_ID: ${{ secrets.B2_BOOTSTRAP_KEY_ID }}
+          B2_BOOTSTRAP_APPLICATION_KEY: ${{ secrets.B2_BOOTSTRAP_APPLICATION_KEY }}
+          B2_BUCKET: ${{ github.event.repository.name }}
+          WEB_ORIGIN: https://${{ github.repository_owner }}.github.io
       - run: npx wrangler d1 migrations apply DB --remote --config services/api/wrangler.jsonc
       - run: npm run deploy -w services/api

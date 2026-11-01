@@ -40,6 +40,60 @@
   opacity: .55;
 }
 
+.music-upload {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  min-height: 58px;
+  margin-top: 10px;
+  padding: 10px 14px;
+  border: 1.5px dashed #bad3ed;
+  border-radius: 12px;
+  background: #f4f8ff;
+  color: #1d67bc;
+  cursor: pointer;
+}
+
+.music-upload > span {
+  min-width: 0;
+}
+
+.music-upload strong,
+.music-upload small {
+  display: block;
+}
+
+.music-upload strong {
+  font-size: 13px;
+}
+
+.music-upload small {
+  margin-top: 3px;
+  color: #7188a0;
+  font-size: 10px;
+}
+
+.music-upload input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.music-upload:focus-within {
+  border-color: #327bd0;
+  box-shadow: 0 0 0 3px #327bd015;
+}
+
+.music-upload.disabled {
+  cursor: wait;
+  opacity: .6;
+}
+
 .music-result {
   cursor: pointer;
   border-radius: 12px;

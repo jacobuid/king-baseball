@@ -2,6 +2,19 @@ import React, { useEffect, useRef, useState } from 'react'
 import { Icon, Modal } from './ui'
 
 const time = seconds => Number.isFinite(seconds) ? `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, '0')}` : ''
+const audioTypes = { mp3: 'audio/mpeg', m4a: 'audio/mp4', mp4: 'audio/mp4', aac: 'audio/aac', wav: 'audio/wav' }
+function audioMetadata(file) {
+  return new Promise((resolve, reject) => {
+    const audio = document.createElement('audio')
+    const url = URL.createObjectURL(file)
+    const done = value => { URL.revokeObjectURL(url); audio.removeAttribute('src'); audio.load(); value() }
+    const timer = setTimeout(() => done(() => reject(new Error('Could not read this audio file.'))), 12000)
+    audio.preload = 'metadata'
+    audio.onloadedmetadata = () => { clearTimeout(timer); const duration = audio.duration; done(() => Number.isFinite(duration) && duration > 0 ? resolve(duration) : reject(new Error('Could not determine the audio duration.'))) }
+    audio.onerror = () => { clearTimeout(timer); done(() => reject(new Error('This audio file could not be opened.'))) }
+    audio.src = url
+  })
+}
 export function MusicDrawer({ api, target, player, onClose, onAssigned }) {
   const [library, setLibrary] = useState(null)
   const [query, setQuery] = useState('')
@@ -62,6 +75,29 @@ export function MusicDrawer({ api, target, player, onClose, onAssigned }) {
       setPending(track.id)
       const data = await api()
       if (active.current) { setLibrary(data); setNotice('Import queued. You can close this drawer while it finishes.') }
+    } catch (e) { if (active.current) setError(e.message) }
+    finally { if (active.current) setBusy(false) }
+  }
+  async function uploadSong(event) {
+    const input = event.currentTarget
+    const file = input.files?.[0]
+    input.value = ''
+    if (!file) return
+    setBusy(true); setError(''); setNotice('')
+    try {
+      const extension = file.name.split('.').pop()?.toLowerCase() || ''
+      const contentType = audioTypes[extension]
+      if (!contentType) throw new Error('Choose an MP3, M4A, AAC, or WAV audio file.')
+      if (file.size > 50 * 1024 * 1024) throw new Error('Audio files must be 50 MB or smaller.')
+      const duration = await audioMetadata(file)
+      if (duration > 1200) throw new Error('Audio must be 20 minutes or shorter.')
+      const title = file.name.replace(/\.[^.]+$/, '').trim() || 'Uploaded song'
+      const created = await api('/upload', { title, contentType, size: file.size, duration })
+      const uploaded = await fetch(created.uploadUrl, { method: 'PUT', headers: { 'Content-Type': contentType }, body: file, signal: AbortSignal.timeout(120000) })
+      if (!uploaded.ok) throw new Error('The audio upload failed. Please try again.')
+      await api(`/upload/${created.track.id}/complete`, {})
+      const data = await api()
+      if (active.current) { setLibrary(data); setNotice(`${title} was uploaded to your music library.`) }
     } catch (e) { if (active.current) setError(e.message) }
     finally { if (active.current) setBusy(false) }
   }
