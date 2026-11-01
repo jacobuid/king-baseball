@@ -26,12 +26,14 @@ export function MusicDrawer({ api, target, player, onClose, onAssigned }) {
   const [selected, setSelected] = useState([])
   const [searchPreview, setSearchPreview] = useState(null)
   const [confirmation, setConfirmation] = useState(null)
+  const [playingTrackId, setPlayingTrackId] = useState(null)
   const [pending, setPending] = useState(null)
   const [retry, setRetry] = useState(0)
   const [pollTick, setPollTick] = useState(0)
   const [closing, setClosing] = useState(false)
   const active = useRef(true)
   const preview = useRef(null)
+  const loadedPreviewId = useRef(null)
   const searchPreviewFrame = useRef(null)
   const previewSequence = useRef(0)
   const closeTimer = useRef(null)
@@ -45,6 +47,7 @@ export function MusicDrawer({ api, target, player, onClose, onAssigned }) {
     setClosing(true)
     previewSequence.current++
     preview.current?.pause()
+    setPlayingTrackId(null)
     closeTimer.current = setTimeout(onClose, 220)
   }
   useEffect(() => {
@@ -83,6 +86,11 @@ export function MusicDrawer({ api, target, player, onClose, onAssigned }) {
   async function deleteSong(track) {
     setBusy(true); setError(''); setNotice('')
     try {
+      if (loadedPreviewId.current === track.id) {
+        preview.current?.pause()
+        loadedPreviewId.current = null
+        setPlayingTrackId(null)
+      }
       await api(`/${track.id}`, {}, 'DELETE')
       const data = await api()
       if (active.current) {
@@ -120,6 +128,7 @@ export function MusicDrawer({ api, target, player, onClose, onAssigned }) {
   function previewResult(result) {
     previewSequence.current++
     preview.current?.pause()
+    setPlayingTrackId(null)
     if (searchPreview?.videoId === result.videoId) {
       playSearchPreview(searchPreviewFrame.current)
       return
@@ -141,11 +150,26 @@ export function MusicDrawer({ api, target, player, onClose, onAssigned }) {
     finally { if (active.current) setBusy(false) }
   }
   async function listen(track) {
-    const sequence = ++previewSequence.current
-    preview.current?.pause(); setError('')
+    const audio = preview.current
+    if (!audio) return
+    setError('')
+    let sequence = previewSequence.current
     try {
+      if (loadedPreviewId.current === track.id && audio.src) {
+        if (audio.paused) { await audio.play(); setPlayingTrackId(track.id) }
+        else { audio.pause(); setPlayingTrackId(null) }
+        return
+      }
+      sequence = ++previewSequence.current
+      audio.pause()
+      setPlayingTrackId(null)
       const { url } = await api(`/${track.id}/play`, {})
-      if (active.current && sequence === previewSequence.current) { preview.current.src = url; await preview.current.play() }
+      if (active.current && sequence === previewSequence.current) {
+        loadedPreviewId.current = track.id
+        audio.src = url
+        await audio.play()
+        setPlayingTrackId(track.id)
+      }
     } catch (e) { if (active.current && sequence === previewSequence.current) setError(e.message) }
   }
   const team = target === 'team'
@@ -167,8 +191,8 @@ export function MusicDrawer({ api, target, player, onClose, onAssigned }) {
       })}</div>
       <h3>Your music</h3>
       {!library.tracks.length && <p>Search above to import your first song.</p>}
-      {library.tracks.map(track => <article key={track.id} className="music-library-track"><div><strong>{track.title}</strong><small>{track.artist} {time(track.duration)}{track.status !== 'ready' && ` · ${track.status}`}</small>{track.status === 'failed' && <small>{track.error}</small>}</div>{track.status === 'ready' ? <><button type="button" className="music-preview button-tertiary" aria-label={`Preview ${track.title}`} onClick={() => listen(track)}><Icon name="play" size={14} /></button>{team ? <input type="checkbox" aria-label={`Include ${track.title} in team playlist`} checked={selected.includes(track.id)} onChange={e => setSelected(e.target.checked ? [...selected, track.id] : selected.filter(id => id !== track.id))} /> : <button type="button" className="button-secondary" disabled={busy} onClick={() => assign([track.id])}>Use song</button>}</> : track.status === 'failed' ? <button type="button" className="button-secondary" disabled={busy} onClick={() => setConfirmation({ type: 'import', track })}>Retry</button> : <span className="music-pending" role="status">Importing…</span>}{['ready', 'failed'].includes(track.status) && <button type="button" className="music-delete-button" disabled={busy} aria-label={`Delete ${track.title} from Your music`} onClick={() => setConfirmation({ type: 'delete', track })}><Icon name="trash" size={15} /></button>}</article>)}
-      <audio ref={preview} controls className="music-audio-preview" onError={() => setError('Preview could not play. Try again.')} />
+      {library.tracks.map(track => <article key={track.id} className="music-library-track"><div><strong>{track.title}</strong><small>{track.artist} {time(track.duration)}{track.status !== 'ready' && ` · ${track.status}`}</small>{track.status === 'failed' && <small>{track.error}</small>}</div>{track.status === 'ready' ? <><button type="button" className={`music-preview button-tertiary${playingTrackId === track.id ? ' playing' : ''}`} aria-label={`${playingTrackId === track.id ? 'Pause' : 'Play'} ${track.title}`} aria-pressed={playingTrackId === track.id} onClick={() => listen(track)}><Icon name={playingTrackId === track.id ? 'pause' : 'play'} size={14} /></button>{team ? <input type="checkbox" aria-label={`Include ${track.title} in team playlist`} checked={selected.includes(track.id)} onChange={e => setSelected(e.target.checked ? [...selected, track.id] : selected.filter(id => id !== track.id))} /> : <button type="button" className="button-secondary" disabled={busy} onClick={() => assign([track.id])}>Use song</button>}</> : track.status === 'failed' ? <button type="button" className="button-secondary" disabled={busy} onClick={() => setConfirmation({ type: 'import', track })}>Retry</button> : <span className="music-pending" role="status">Importing…</span>}{['ready', 'failed'].includes(track.status) && <button type="button" className="music-delete-button" disabled={busy} aria-label={`Delete ${track.title} from Your music`} onClick={() => setConfirmation({ type: 'delete', track })}><Icon name="trash" size={15} /></button>}</article>)}
+      <audio ref={preview} className="music-audio-preview" aria-hidden="true" onEnded={() => setPlayingTrackId(null)} onError={() => { setPlayingTrackId(null); setError('Preview could not play. Try again.') }} />
       {team && <><h3>Playlist order</h3><ol className="music-order">{selected.map((id, index) => <li key={id}><span>{library.tracks.find(t => t.id === id)?.title}</span><button type="button" disabled={index === 0} aria-label="Move song earlier" onClick={() => setSelected(list => { const copy = [...list]; [copy[index - 1], copy[index]] = [copy[index], copy[index - 1]]; return copy })}>↑</button><button type="button" disabled={index === selected.length - 1} aria-label="Move song later" onClick={() => setSelected(list => { const copy = [...list]; [copy[index], copy[index + 1]] = [copy[index + 1], copy[index]]; return copy })}>↓</button></li>)}</ol><button type="button" className="sheet-save button-primary" disabled={busy} onClick={() => assign(selected)}>{busy ? 'Saving…' : 'Save team playlist'}</button></>}
       {!team && <button type="button" className="remove-song" disabled={busy} onClick={() => assign([])}>Remove walk-up song</button>}
     </>}

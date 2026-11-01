@@ -179,6 +179,16 @@
   border-color: #df9b9b;
 }
 
+.music-audio-preview {
+  display: none;
+}
+
+.music-preview.playing {
+  border-color: var(--theme-blue-dark);
+  background: var(--theme-blue-dark);
+  color: #fff;
+}
+
 .sheet.music-confirm-dialog {
   inset: 0;
   width: min(calc(100% - 32px), 390px);
