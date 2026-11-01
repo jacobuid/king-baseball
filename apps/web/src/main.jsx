@@ -87,6 +87,15 @@ function Welcome() {
   </div>
 }
 function OrientationLock() {
+  useEffect(() => {
+    const lockPortrait = () => {
+      const request = window.screen.orientation?.lock?.('portrait-primary')
+      request?.catch(() => {})
+    }
+    lockPortrait()
+    window.addEventListener('orientationchange', lockPortrait)
+    return () => window.removeEventListener('orientationchange', lockPortrait)
+  }, [])
   return <div className="orientation-lock" role="status" aria-live="polite">
     <img src={`${import.meta.env.BASE_URL}logo.png`} alt="KingSports" />
     <strong>Rotate your device</strong>

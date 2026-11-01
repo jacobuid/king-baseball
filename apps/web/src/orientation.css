@@ -2,7 +2,8 @@
   display: none;
 }
 
-@media (orientation: landscape) and (hover: none) and (pointer: coarse) {
+@media (orientation: landscape) and (max-height: 600px) {
+  html,
   body {
     overflow: hidden;
   }
