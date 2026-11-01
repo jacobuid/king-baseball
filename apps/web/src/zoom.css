@@ -1,7 +1,9 @@
 /* Keep the installed PWA at its designed mobile scale while preserving scrolling. */
 html,
 body {
+  background-color: var(--theme-blue-dark, #041c36);
   touch-action: pan-y;
   overscroll-behavior-x: none;
+  overscroll-behavior-y: none;
   overflow-x: hidden;
 }
