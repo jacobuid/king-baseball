@@ -28,6 +28,8 @@ test('music drawer renders the upload control directly below search', () => {
   const upload = source.indexOf('className={`music-upload')
   assert.ok(search >= 0 && upload > search, 'Upload music control must render after the search input')
   assert.match(source, /type="file"[^>]+onChange=\{uploadSong\}/)
+  assert.match(source, /youtube\.com\/embed\/.*enablejsapi=1/)
+  assert.match(source, /onLoad=\{event => playSearchPreview\(event\.currentTarget\)\}/)
 })
 
 test('library, assignments, and playback are isolated by account', async () => {

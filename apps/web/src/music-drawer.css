@@ -161,9 +161,18 @@
 .music-search-preview iframe {
   display: block;
   width: 100%;
+  min-height: 200px;
   aspect-ratio: 16 / 9;
   border: 0;
   background: #000;
+}
+
+.music-search-preview .music-preview-help {
+  display: block;
+  padding: 8px 12px 10px;
+  color: #bcd0e3;
+  font-size: 10px;
+  line-height: 1.4;
 }
 
 .sheet.music-drawer::backdrop {

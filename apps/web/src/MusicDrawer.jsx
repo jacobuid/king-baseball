@@ -31,6 +31,7 @@ export function MusicDrawer({ api, target, player, onClose, onAssigned }) {
   const [closing, setClosing] = useState(false)
   const active = useRef(true)
   const preview = useRef(null)
+  const searchPreviewFrame = useRef(null)
   const previewSequence = useRef(0)
   const closeTimer = useRef(null)
   useEffect(() => {
@@ -104,7 +105,17 @@ export function MusicDrawer({ api, target, player, onClose, onAssigned }) {
   function previewResult(result) {
     previewSequence.current++
     preview.current?.pause()
-    setSearchPreview(current => current?.videoId === result.videoId ? null : result)
+    if (searchPreview?.videoId === result.videoId) {
+      playSearchPreview(searchPreviewFrame.current)
+      return
+    }
+    setSearchPreview(result)
+  }
+  function playSearchPreview(frame) {
+    if (!frame?.contentWindow) return
+    const command = JSON.stringify({ event: 'command', func: 'playVideo', args: [] })
+    frame.contentWindow.postMessage(command, 'https://www.youtube.com')
+    setTimeout(() => frame.contentWindow?.postMessage(command, 'https://www.youtube.com'), 250)
   }
   async function assign(ids) {
     setBusy(true); setError('')
@@ -133,6 +144,7 @@ export function MusicDrawer({ api, target, player, onClose, onAssigned }) {
       <label className={`music-upload${busy ? ' disabled' : ''}`}><Icon name="upload" size={17} /><span><strong>{busy ? 'Working…' : 'Upload music'}</strong><small>MP3, M4A, AAC, or WAV · up to 50 MB</small></span><input type="file" accept=".mp3,.m4a,.mp4,.aac,.wav,audio/mpeg,audio/mp4,audio/aac,audio/wav" disabled={busy} onChange={uploadSong} /></label>
       {searching && <p role="status">Searching…</p>}
       {!searching && query.trim().length >= 3 && library.configured && results.length === 0 && <p>No results. Try another song or artist.</p>}
+      {searchPreview && <section className="music-search-preview" aria-label={`Previewing ${searchPreview.title}`}><div className="music-search-preview-heading"><span><strong>{searchPreview.title}</strong>{searchPreview.artist && <small>{searchPreview.artist}</small>}</span><button type="button" className="close" onClick={() => setSearchPreview(null)} aria-label="Close preview"><Icon name="close" size={14} /></button></div><iframe ref={searchPreviewFrame} key={searchPreview.videoId} src={`https://www.youtube.com/embed/${encodeURIComponent(searchPreview.videoId)}?autoplay=1&playsinline=1&rel=0&enablejsapi=1&origin=${encodeURIComponent(window.location.origin)}&widget_referrer=${encodeURIComponent(window.location.href)}`} title={`Preview ${searchPreview.title}`} allow="autoplay; encrypted-media; picture-in-picture" referrerPolicy="origin-when-cross-origin" onLoad={event => playSearchPreview(event.currentTarget)} allowFullScreen /><small className="music-preview-help">If your iPhone blocks automatic playback, tap the play button once.</small></section>}
       <div className="music-results">{results.map(result => {
         const track = library.tracks.find(t => t.videoId === result.videoId)
         const previewing = searchPreview?.videoId === result.videoId
