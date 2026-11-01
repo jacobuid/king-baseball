@@ -133,8 +133,8 @@ export function TeamView({ userId, onEdit }) {
         <section className={`view-playlist-panel${playlistOpen ? ' open' : ''}`} aria-label="Team playlist">
           <div className="view-playlist-toolbar">
             <button className="view-playlist" disabled={!playable} onClick={playlist}><span className="view-playlist-icon"><Icon name={playlistIsActive && playing ? 'pause' : 'playlist'} size={25} /></span><span><strong>{playlistIsActive ? playing ? 'Pause Team Playlist' : 'Resume Team Playlist' : 'Play Team Playlist'}</strong><small>{playable ? `${teamSongs.length} ${teamSongs.length === 1 ? 'song' : 'songs'} · ${shuffle ? 'Shuffle play' : 'Play in order'}` : 'No team songs yet. Edit this team to add songs.'}</small></span></button>
-            <button className={`view-playlist-tool${shuffle ? ' active' : ''}`} disabled={!playable} aria-label={`${shuffle ? 'Turn off' : 'Turn on'} shuffle`} aria-pressed={shuffle} onClick={() => setShuffle(value => !value)}><Icon name="shuffle" size={17} /></button>
-            <button className="view-playlist-tool playlist-expand" disabled={!playable} aria-label={`${playlistOpen ? 'Hide' : 'Show'} team songs`} aria-expanded={playlistOpen} onClick={() => setPlaylistOpen(value => !value)}><Icon name="chevronDown" size={16} /></button>
+            <button className={`view-playlist-tool${shuffle ? ' active' : ''}`} disabled={!playable} aria-label={`${shuffle ? 'Turn off' : 'Turn on'} shuffle`} aria-pressed={shuffle} onClick={() => setShuffle(value => !value)}><Icon name="shuffle" size={20} /></button>
+            <button className="view-playlist-tool playlist-expand" disabled={!playable} aria-label={`${playlistOpen ? 'Hide' : 'Show'} team songs`} aria-expanded={playlistOpen} onClick={() => setPlaylistOpen(value => !value)}><Icon name="chevronDown" size={19} /></button>
           </div>
           {playlistOpen && <div className="view-playlist-songs">{teamSongs.map((song, index) => {
             const songActive = activeId === 'team-' + song.id

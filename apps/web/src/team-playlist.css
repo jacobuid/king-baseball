@@ -24,8 +24,8 @@
 .view-playlist-tool {
   display: grid;
   place-items: center;
-  flex: 0 0 44px;
-  width: 44px;
+  flex: 0 0 52px;
+  width: 52px;
   border: 0;
   border-left: 1px solid #ffffff14;
   background: transparent;
@@ -115,8 +115,8 @@
 
 @media (max-width: 360px) {
   .view-playlist-tool {
-    flex-basis: 40px;
-    width: 40px;
+    flex-basis: 48px;
+    width: 48px;
   }
 
   .view-playlist-panel .view-playlist {
