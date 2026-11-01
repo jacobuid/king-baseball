@@ -4,6 +4,7 @@
   "start_url": "./#/team",
   "scope": "./",
   "display": "standalone",
+  "orientation": "portrait-primary",
   "background_color": "#06284b",
   "theme_color": "#041c36",
   "icons": [

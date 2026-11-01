@@ -8,6 +8,7 @@ import { AppLoadingProvider, StartupReady, useAppLoading } from './LoadingScreen
 import './style.css'
 import './theme.css'
 import './zoom.css'
+import './orientation.css'
 
 const key = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
 const appUrl = new URL(import.meta.env.BASE_URL, window.location.origin).href
@@ -85,4 +86,11 @@ function Welcome() {
     </main>
   </div>
 }
-createRoot(document.getElementById('root')).render(<AppLoadingProvider needsAuthentication={!!key}>{key ? <ClerkProvider publishableKey={key} signInForceRedirectUrl={appUrl} signUpForceRedirectUrl={appUrl} afterSignOutUrl={appUrl}><ClerkLoaded><StartupReady /></ClerkLoaded><SignedOut><Welcome /></SignedOut><SignedIn><App /></SignedIn></ClerkProvider> : <Welcome />}</AppLoadingProvider>)
+function OrientationLock() {
+  return <div className="orientation-lock" role="status" aria-live="polite">
+    <img src={`${import.meta.env.BASE_URL}logo.png`} alt="KingSports" />
+    <strong>Rotate your device</strong>
+    <span>KingSports is designed for portrait mode.</span>
+  </div>
+}
+createRoot(document.getElementById('root')).render(<><AppLoadingProvider needsAuthentication={!!key}>{key ? <ClerkProvider publishableKey={key} signInForceRedirectUrl={appUrl} signUpForceRedirectUrl={appUrl} afterSignOutUrl={appUrl}><ClerkLoaded><StartupReady /></ClerkLoaded><SignedOut><Welcome /></SignedOut><SignedIn><App /></SignedIn></ClerkProvider> : <Welcome />}</AppLoadingProvider><OrientationLock /></>)

@@ -89,7 +89,7 @@ export function TeamView({ userId, onEdit }) {
             <button className="view-play" disabled={!available} aria-label={`${isPlaying ? 'Stop' : 'Play'} walk-up music for ${player.name}`} aria-pressed={activeId === player.id} onClick={() => playPlayer(player.id)}><Icon name={isPlaying ? 'stop' : 'play'} size={19} /></button>
           </article>
         })}</div>
-        <button className="view-playlist" disabled={!playable} onClick={playlist}><span className="view-playlist-icon"><Icon name="playlist" size={27} /></span><span><strong>{activeId?.startsWith('team-') ? 'Stop Team Playlist' : 'Team Playlist'}</strong><small>{playable ? 'Play your team songs in order, in full.' : 'Add team songs in Edit Team to create your playlist.'}</small></span><Icon name="chevronRight" size={17} /></button>
+        <button className="view-playlist" disabled={!playable} onClick={playlist}><span className="view-playlist-icon"><Icon name="playlist" size={27} /></span><span><strong>{activeId?.startsWith('team-') ? 'Stop Team Playlist' : 'Team Playlist'}</strong><small>{playable ? 'Play your team songs in order, in full.' : 'No team songs yet. Edit this team to add songs for pregame, postgame, and transitions.'}</small></span></button>
         <button className="view-edit" onClick={onEdit}>Edit Team <Icon name="arrowRight" size={20} /></button>
       </>}
     </>}
