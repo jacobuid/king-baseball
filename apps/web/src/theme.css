@@ -3,6 +3,7 @@
   --theme-blue-dark: #041c36;
   --theme-blue-light: #123c67;
   --theme-yellow: #ffb65f;
+  background: var(--theme-blue-dark);
   --button-primary-background: var(--theme-blue-light);
   --button-primary-hover: #194d7e;
   --button-secondary-background: #eaf3ff;
