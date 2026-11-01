@@ -144,7 +144,7 @@ export async function handleMusicRequest(request: Request, env: MusicEnv, userId
       if (typeof entry !== 'string') {
         if (entry.introId) {
           const intro = await env.DB.prepare("SELECT id FROM music_tracks WHERE id=? AND owner_user_id=? AND status='ready' AND kind='intro'").bind(entry.introId, userId).first()
-          if (!intro) return json({ error: 'Record or upload a valid announcer intro' }, 400)
+          if (!intro) return json({ error: 'Record or upload a valid announcement' }, 400)
         }
       }
     }
