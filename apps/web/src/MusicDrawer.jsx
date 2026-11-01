@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { Icon, Modal } from './ui'
+import { ensureAudioGain, resetAudioGain, scheduleAudioFade } from './audioFade'
 
 const time = seconds => Number.isFinite(seconds) ? `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, '0')}` : ''
 const audioTypes = { mp3: 'audio/mpeg', m4a: 'audio/mp4', mp4: 'audio/mp4', aac: 'audio/aac', wav: 'audio/wav' }
@@ -117,6 +118,7 @@ export function MusicDrawer({ api, target, player, onClose, onAssigned }) {
   const previewSequence = useRef(0)
   const closeTimer = useRef(null)
   const clipTimer = useRef(null)
+  const musicGraph = useRef(null)
   const recorder = useRef(null)
   const recordingStarted = useRef(0)
   const temporaryIntroIds = useRef(new Set())
@@ -358,12 +360,13 @@ export function MusicDrawer({ api, target, player, onClose, onAssigned }) {
     if (clipPlaying) {
       previewSequence.current++
       clearInterval(clipTimer.current)
-      introElement.pause(); element.pause(); element.volume = 1; setClipPlaying(false); setPlayingTrackId(null)
+      introElement.pause(); element.pause(); resetAudioGain(musicGraph.current); setClipPlaying(false); setPlayingTrackId(null)
       return
     }
+    const graphPromise = ensureAudioGain(element, musicGraph)
     const sequence = ++previewSequence.current
     clearInterval(clipTimer.current)
-    introElement.pause(); element.pause(); element.volume = 1
+    introElement.pause(); element.pause(); resetAudioGain(musicGraph.current)
     setPlayingTrackId(null); setClipPlaying(true); setError('')
     try {
       const intro = !musicOnly && announcerEnabled ? library.tracks.find(item => item.id === introTrackId) : null
@@ -379,22 +382,22 @@ export function MusicDrawer({ api, target, player, onClose, onAssigned }) {
         new Promise((resolve, reject) => { if (element.readyState >= 1) return resolve(); const ready = () => { cleanup(); resolve() }; const failed = () => { cleanup(); reject(new Error('The song clip could not be loaded.')) }; const cleanup = () => { element.removeEventListener('loadedmetadata', ready); element.removeEventListener('error', failed) }; element.addEventListener('loadedmetadata', ready); element.addEventListener('error', failed) }),
       ])
       if (!active.current || sequence !== previewSequence.current) return
-      element.currentTime = clipStart; element.volume = fadeIn ? 0 : 1
+      const graph = await graphPromise
+      element.currentTime = clipStart; element.volume = 1
       if (intro) setTimeout(() => { if (active.current && sequence === previewSequence.current) introElement.play().catch(() => {}) }, introStart * 1000)
       await new Promise(resolve => setTimeout(resolve, (musicOnly ? 0 : musicStart) * 1000))
       if (!active.current || sequence !== previewSequence.current) return
+      scheduleAudioFade(graph, clipDuration, fadeIn, fadeOut)
       await element.play()
       setPlayingTrackId(track.id)
-      const fade = Math.min(.8, clipDuration / 3)
       clipTimer.current = setInterval(() => {
         const elapsed = element.currentTime - clipStart
         const remaining = clipDuration - elapsed
         if (remaining <= 0) {
-          clearInterval(clipTimer.current); element.pause(); element.volume = 1
+          clearInterval(clipTimer.current); element.pause(); resetAudioGain(musicGraph.current)
           setClipPlaying(false); setPlayingTrackId(null)
           return
         }
-        element.volume = Math.max(0, Math.min(1, fadeIn ? elapsed / fade : 1, fadeOut ? remaining / fade : 1))
       }, 50)
     } catch (e) {
       if (active.current && sequence === previewSequence.current) { setError(e.message || 'The walk-up preview could not play.'); setClipPlaying(false) }
@@ -490,7 +493,7 @@ export function MusicDrawer({ api, target, player, onClose, onAssigned }) {
       <button type="button" className="sheet-save button-primary" disabled={busy || !playerReady} onClick={saveWalkup}><Icon name="save" size={16} />{busy ? 'Saving…' : 'Save Walk-up'}</button>
       <button type="button" className="drawer-cancel button-secondary" disabled={busy} onClick={closeDrawer}>Cancel</button>
     </div>}
-    <audio ref={introPreview} hidden aria-hidden="true" onEnded={() => setIntroPlaying(false)} onPause={() => setIntroPlaying(false)} /><audio ref={preview} className="music-audio-preview" aria-hidden="true" onEnded={() => setPlayingTrackId(null)} onError={() => { setPlayingTrackId(null); setClipPlaying(false); setError('Preview could not play. Try again.') }} />
+    <audio ref={introPreview} hidden aria-hidden="true" onEnded={() => setIntroPlaying(false)} onPause={() => setIntroPlaying(false)} /><audio ref={preview} crossOrigin="anonymous" className="music-audio-preview" aria-hidden="true" onEnded={() => setPlayingTrackId(null)} onError={() => { setPlayingTrackId(null); setClipPlaying(false); setError('Preview could not play. Try again.') }} />
   </Modal>{confirmation && <Modal className="music-confirm-dialog" iconName={confirmation.type === 'delete' ? 'trash' : 'cloudArrowDown'} title={confirmation.type === 'delete' ? 'Delete this song?' : 'Import this song?'} onClose={() => setConfirmation(null)}><p>{confirmation.type === 'delete' ? <>Delete <strong>“{confirmation.track.title}”</strong> from Your music? This removes the stored audio and clears it from every player and team playlists.</> : <>Import <strong>“{confirmation.track.title}”</strong> to Your music? KingSports will download and store a private copy for your team.</>}</p><div className="music-confirm-actions"><button type="button" className="button-tertiary" onClick={() => setConfirmation(null)}>Cancel</button><button type="button" className={confirmation.type === 'delete' ? 'music-confirm-delete' : 'button-primary'} onClick={() => { const action = confirmation; setConfirmation(null); if (action.type === 'delete') deleteSong(action.track); else importSong(action.track.videoId) }}>{confirmation.type === 'delete' ? 'Delete song' : 'Import song'}</button></div></Modal>}</>
   return <><Modal className={`music-drawer${closing ? ' closing' : ''}`} title={team ? 'Find Music' : 'Walk-up music'} onClose={closeDrawer}>
     <p>{team ? 'Full songs for pregame, postgame, and between innings.' : `Choose the entrance song for ${player.name}.`}</p>

@@ -5,6 +5,7 @@ import { createTeamApi } from './teamApi'
 import { teamStorage } from './teamStorage'
 import { createTeamTheme } from './teamTheme'
 import { createMusicApi, mergeMusic } from './musicApi'
+import { ensureAudioGain, resetAudioGain, scheduleAudioFade } from './audioFade'
 import './team-playlist.css'
 
 export function TeamView({ userId, onEdit }) {
@@ -23,6 +24,7 @@ export function TeamView({ userId, onEdit }) {
   const audio = useRef(null)
   const introAudio = useRef(null)
   const clipTimer = useRef(null)
+  const musicGraph = useRef(null)
   const queue = useRef([])
   useEffect(() => {
     let active = true
@@ -49,7 +51,7 @@ export function TeamView({ userId, onEdit }) {
     element.load()
     introElement.load()
     clearInterval(clipTimer.current)
-    element.volume = 1
+    resetAudioGain(musicGraph.current)
     if (!activeSong) return
     let disposed = false
     let objectUrl
@@ -82,22 +84,22 @@ export function TeamView({ userId, onEdit }) {
         })
         const start = Math.max(0, Number(activeSong.clipStart) || 0)
         const duration = Math.max(3, Number(activeSong.clipDuration) || Math.min(15, activeSong.duration || 15))
-        const fade = Math.min(.8, duration / 3)
         element.currentTime = start
-        element.volume = activeSong.fadeIn === false ? 1 : 0
+        const graph = await ensureAudioGain(element, musicGraph)
+        element.volume = 1
         if (introUrl) setTimeout(() => { if (!disposed) introElement.play().catch(() => {}) }, Math.max(0, Number(activeSong.introStart) || 0) * 1000)
         await new Promise(resolve => setTimeout(resolve, Math.max(0, Number(activeSong.musicStart) || 0) * 1000))
         if (disposed) return
+        scheduleAudioFade(graph, duration, activeSong.fadeIn !== false, activeSong.fadeOut !== false)
         await element.play()
         clipTimer.current = setInterval(() => {
           const elapsed = element.currentTime - start
           const remaining = duration - elapsed
           if (remaining <= 0) {
-            clearInterval(clipTimer.current); element.pause(); element.volume = 1
+            clearInterval(clipTimer.current); element.pause(); resetAudioGain(musicGraph.current)
             setPlaying(false); setActiveId(null)
             return
           }
-          element.volume = Math.max(0, Math.min(1, activeSong.fadeIn === false ? 1 : elapsed / fade, activeSong.fadeOut === false ? 1 : remaining / fade))
         }, 50)
       } catch (error) { if (!disposed) {
         if (error.name === 'NotAllowedError') setError('Tap the play button again to start playback.')
@@ -105,9 +107,10 @@ export function TeamView({ userId, onEdit }) {
       } }
     }
     play()
-    return () => { disposed = true; clearInterval(clipTimer.current); introElement.pause(); element.pause(); element.volume = 1; introElement.removeAttribute('src'); element.removeAttribute('src'); if (objectUrl) URL.revokeObjectURL(objectUrl) }
+    return () => { disposed = true; clearInterval(clipTimer.current); introElement.pause(); element.pause(); resetAudioGain(musicGraph.current); introElement.removeAttribute('src'); element.removeAttribute('src'); if (objectUrl) URL.revokeObjectURL(objectUrl) }
   }, [activeSong, requestMusic])
   function playPlayer(id) {
+    ensureAudioGain(audio.current, musicGraph).catch(() => {})
     queue.current = []
     setPlaylistMode(false)
     setError('')
@@ -160,7 +163,7 @@ export function TeamView({ userId, onEdit }) {
   const playlistIsActive = playlistMode && activeId?.startsWith('team-')
   return <main className="team-view" style={createTeamTheme(team?.primaryColor)}>
     <audio ref={introAudio} hidden onPlaying={() => { setPlaying(true); setError('') }} onPause={() => { if (audio.current?.paused) setPlaying(false) }} />
-    <audio ref={audio} hidden onPlaying={() => { setPlaying(true); setError('') }} onPause={() => { if (introAudio.current?.paused) setPlaying(false) }} onEnded={nextSong} onError={() => { queue.current = []; setPlaylistMode(false); setError('This song could not be played. Tap play to retry.'); setActiveId(null) }} />
+    <audio ref={audio} crossOrigin="anonymous" hidden onPlaying={() => { setPlaying(true); setError('') }} onPause={() => { if (introAudio.current?.paused) setPlaying(false) }} onEnded={nextSong} onError={() => { queue.current = []; setPlaylistMode(false); setError('This song could not be played. Tap play to retry.'); setActiveId(null) }} />
     {loading ? <div className="view-empty" role="status"><Icon name="ball" size={42} /><h2>Loading your lineup...</h2></div> : <>
       {error && <div className="view-error" role="alert"><p>{error}</p>{!team && <button className="view-retry" onClick={() => setRetry(value => value + 1)}>Try again</button>}</div>}
       {!team ? !error && <div className="view-empty"><Icon name="team" size={46} /><h2>Your team starts here.</h2><p>Create your team and build your first lineup.</p><button className="view-edit" onClick={onEdit}>Create Team <Icon name="plus" size={18} /></button></div> : <>
