@@ -74,3 +74,4 @@
 .team-cancel{display:flex;align-items:center;justify-content:center;width:100%;min-height:54px;margin-top:10px;border-radius:12px;font-size:16px;font-weight:800} 
 #team-name{font-size:14px}
 .music-drawer h2:not(#dialog-title){margin:22px 0 12px}
+.music-drawer .music-library-heading{margin-top:26px;padding-top:24px;border-top:1px solid #d7e2ed}
