@@ -366,7 +366,7 @@
 .music-searching > span { width: 19px; height: 19px; border: 3px solid #b9d1e8; border-top-color: var(--theme-blue-light); border-radius: 50%; animation: music-search-spin .75s linear infinite; }
 .walkup-song-radio { flex: 0 0 22px; width: 22px; height: 22px; margin: 0; accent-color: var(--theme-blue-light); cursor: pointer; }
 .walkup-section-body .music-library-heading { padding: 18px 0 10px; }
-.walkup-section-body .music-library-track.selected { border-radius: 11px; background: #e5f1fd; box-shadow: inset 0 0 0 1px #b9d7f3; }
+.walkup-section-body .music-library-track.selected { margin-inline: -14px; padding-inline: 14px; border-top: 1px solid #9fc6e9; border-bottom: 1px solid #9fc6e9; border-radius: 0; background: #e5f1fd; box-shadow: none; }
 .walkup-empty-note { margin: 8px 0 0 !important; padding: 14px; border-radius: 11px; background: #fff; color: #71869b !important; }
 .walkup-drawer > .sheet-save,.walkup-sections > .sheet-save { margin-top: 8px; }
 .walkup-sections > .drawer-cancel { width: 100%; }
