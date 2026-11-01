@@ -41,14 +41,14 @@ const clampClip = (track, start, duration) => {
   const nextStart = Math.min(Math.max(0, Number(start) || 0), Math.max(0, total - 3))
   return { start: Math.round(nextStart * 10) / 10, duration: Math.round(Math.min(Math.max(3, Number(duration) || 15), 60, total - nextStart) * 10) / 10 }
 }
-function WalkupClipEditor({ track, player, intro, start, duration, playing, recording, busy, onStart, onDuration, onPreview, onRecord, onIntroUpload, onSave }) {
+function WalkupClipEditor({ track, player, intro, start, duration, playing, recording, countdown, busy, onStart, onDuration, onPreview, onRecord, onIntroUpload, onSave }) {
   if (!track) return null
   const total = Number(track.duration) || 15
   const maxStart = Math.max(0, total - 3)
   const maxDuration = Math.max(3, Math.min(60, total - start))
   return <section className="walkup-clip-editor" aria-labelledby="walkup-clip-title">
     <div className="walkup-clip-heading"><span className="walkup-clip-icon"><Icon name="music" size={18} /></span><span><h2 id="walkup-clip-title">Build the walk-up</h2><small>{track.title}</small></span></div>
-    <div className="walkup-intro-editor"><div><span>ANNOUNCER INTRO</span><strong>{intro ? 'Intro ready' : 'Record or upload an intro'}</strong><small>Suggested: “Now batting, {player.jerseyNumber ? `number ${player.jerseyNumber}, ` : ''}{player.name}!”</small></div><div className="walkup-intro-actions"><button type="button" className="button-secondary" disabled={busy} onClick={onRecord}><Icon name={recording ? 'stop' : 'microphone'} size={16} />{recording ? 'Stop recording' : intro ? 'Record again' : 'Record intro'}</button><label className="button-secondary"><Icon name="upload" size={15} />Upload intro<input type="file" accept="audio/*,.mp3,.m4a,.mp4,.aac,.wav,.webm,.ogg" disabled={busy || recording} onChange={onIntroUpload} /></label></div></div>
+    <div className="walkup-intro-editor"><div><span>ANNOUNCER INTRO</span><strong>{recording ? 'Recording now' : intro ? 'Intro ready' : 'Record or upload an intro'}</strong><small>Suggested: “Now batting, {player.jerseyNumber ? `number ${player.jerseyNumber}, ` : ''}{player.name}!”</small></div>{countdown && <div className="recording-countdown" role="status" aria-live="assertive"><strong key={countdown}>{countdown}</strong><span>{countdown === 'GO' ? 'Wait for the ding…' : 'Get ready'}</span></div>}{recording && <div className="recording-live" role="status"><span aria-hidden="true" />Recording</div>}<div className="walkup-intro-actions"><button type="button" className="button-secondary" disabled={busy} onClick={onRecord}><Icon name={recording ? 'stop' : 'microphone'} size={16} />{recording ? 'Stop recording' : intro ? 'Record again' : 'Record intro'}</button><label className="button-secondary"><Icon name="upload" size={15} />Upload intro<input type="file" accept="audio/*,.mp3,.m4a,.mp4,.aac,.wav,.webm,.ogg" disabled={busy || recording} onChange={onIntroUpload} /></label></div></div>
     <label className="walkup-range"><span><strong>Song starts at</strong><output>{time(start)}</output></span><input type="range" min="0" max={maxStart} step="0.5" value={start} onChange={event => onStart(clampClip(track, event.target.value, duration))} /></label>
     <label className="walkup-range"><span><strong>Clip length</strong><output>{Math.round(duration)} sec</output></span><input type="range" min="3" max={maxDuration} step="1" value={duration} onChange={event => onDuration(clampClip(track, start, event.target.value))} /></label>
     <p className="walkup-clip-summary">Plays {time(start)}–{time(start + duration)} with a smooth fade in and fade out.</p>
@@ -78,6 +78,7 @@ export function MusicDrawer({ api, target, player, onClose, onAssigned }) {
   const [clipPlaying, setClipPlaying] = useState(false)
   const [introTrackId, setIntroTrackId] = useState(null)
   const [recording, setRecording] = useState(false)
+  const [recordingCountdown, setRecordingCountdown] = useState(null)
   const active = useRef(true)
   const preview = useRef(null)
   const loadedPreviewId = useRef(null)
@@ -248,12 +249,18 @@ export function MusicDrawer({ api, target, player, onClose, onAssigned }) {
         finally { if (active.current) setBusy(false) }
       }
       recorder.current = instance
+      for (const number of [3, 2, 1]) {
+        setRecordingCountdown(String(number)); setNotice(`Recording starts in ${number}…`)
+        await new Promise(resolve => setTimeout(resolve, 700))
+      }
+      setRecordingCountdown('GO'); setNotice('Wait for the ding…')
       await playRecordingCue()
       if (!active.current) { stream.getTracks().forEach(track => track.stop()); return }
+      setRecordingCountdown(null)
       recordingStarted.current = Date.now()
       instance.start(250); setRecording(true); setBusy(false); setNotice('Recording… Tap Stop recording when the announcement is finished.')
       setTimeout(() => { if (instance.state === 'recording') instance.stop() }, 30000)
-    } catch (e) { setRecording(false); setBusy(false); setNotice(''); setError(e.message) }
+    } catch (e) { setRecording(false); setRecordingCountdown(null); setBusy(false); setNotice(''); setError(e.message) }
   }
   function previewResult(result) {
     previewSequence.current++
@@ -405,7 +412,7 @@ export function MusicDrawer({ api, target, player, onClose, onAssigned }) {
       <h2 className="music-library-heading">Your Music</h2>
       {!songTracks.length && <p>Search above to import your first song.</p>}
       {songTracks.map(track => <article key={track.id} className="music-library-track"><div><strong>{track.title}</strong><small>{track.artist} {time(track.duration)}{track.status !== 'ready' && ` · ${track.status}`}</small>{track.status === 'failed' && <small>{track.error}</small>}</div>{track.status === 'ready' ? <><button type="button" className={`music-preview button-tertiary${playingTrackId === track.id ? ' playing' : ''}`} aria-label={`${playingTrackId === track.id ? 'Pause' : 'Play'} ${track.title}`} aria-pressed={playingTrackId === track.id} onClick={() => listen(track)}><Icon name={playingTrackId === track.id ? 'pause' : 'play'} size={14} /></button>{team ? <input type="checkbox" aria-label={`Include ${track.title} in team playlist`} checked={selected.includes(track.id)} onChange={e => setSelected(e.target.checked ? [...selected, track.id] : selected.filter(id => id !== track.id))} /> : <button type="button" className="button-secondary" disabled={busy} onClick={() => chooseClip(track)}>{clipTrackId === track.id ? 'Edit clip' : 'Set clip'}</button>}</> : track.status === 'failed' ? <button type="button" className="button-secondary" disabled={busy} onClick={() => setConfirmation({ type: 'import', track })}>Retry</button> : <span className="music-pending" role="status">Importing…</span>}{['ready', 'failed'].includes(track.status) && <button type="button" className="music-delete-button" disabled={busy} aria-label={`Delete ${track.title} from Your music`} onClick={() => setConfirmation({ type: 'delete', track })}><Icon name="trash" size={15} /></button>}</article>)}
-      {!team && <WalkupClipEditor track={library.tracks.find(track => track.id === clipTrackId)} player={player} intro={library.tracks.find(track => track.id === introTrackId)} start={clipStart} duration={clipDuration} playing={clipPlaying} recording={recording} busy={busy} onStart={clip => { setClipStart(clip.start); setClipDuration(clip.duration) }} onDuration={clip => setClipDuration(clip.duration)} onPreview={() => previewWalkup(library.tracks.find(track => track.id === clipTrackId))} onRecord={toggleRecording} onIntroUpload={uploadIntro} onSave={() => assign([{ id: clipTrackId, start: clipStart, duration: clipDuration, introId: introTrackId }])} />}
+      {!team && <WalkupClipEditor track={library.tracks.find(track => track.id === clipTrackId)} player={player} intro={library.tracks.find(track => track.id === introTrackId)} start={clipStart} duration={clipDuration} playing={clipPlaying} recording={recording} countdown={recordingCountdown} busy={busy} onStart={clip => { setClipStart(clip.start); setClipDuration(clip.duration) }} onDuration={clip => setClipDuration(clip.duration)} onPreview={() => previewWalkup(library.tracks.find(track => track.id === clipTrackId))} onRecord={toggleRecording} onIntroUpload={uploadIntro} onSave={() => assign([{ id: clipTrackId, start: clipStart, duration: clipDuration, introId: introTrackId }])} />}
       <audio ref={preview} className="music-audio-preview" aria-hidden="true" onEnded={() => setPlayingTrackId(null)} onError={() => { setPlayingTrackId(null); setClipPlaying(false); setError('Preview could not play. Try again.') }} />
       {team && <><h2 className="music-playlist-heading">Your Playlist</h2><ol className="music-order">{selected.map((id, index) => <li key={id}><span>{library.tracks.find(t => t.id === id)?.title}</span><button type="button" disabled={index === 0} aria-label="Move song earlier" onClick={() => setSelected(list => { const copy = [...list]; [copy[index - 1], copy[index]] = [copy[index], copy[index - 1]]; return copy })}>↑</button><button type="button" disabled={index === selected.length - 1} aria-label="Move song later" onClick={() => setSelected(list => { const copy = [...list]; [copy[index], copy[index + 1]] = [copy[index + 1], copy[index]]; return copy })}>↓</button></li>)}</ol><button type="button" className="sheet-save button-primary" disabled={busy} onClick={() => assign(selected)}>{busy ? 'Saving…' : <><Icon name="save" size={16} />Save Playlist</>}</button><button type="button" className="drawer-cancel button-secondary" disabled={busy} onClick={closeDrawer}>Cancel</button></>}
       {!team && <button type="button" className="remove-song" disabled={busy} onClick={() => assign([])}>Remove walk-up song</button>}
