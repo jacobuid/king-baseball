@@ -1,12 +1,12 @@
 import React, { useEffect, useRef } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { config } from '@fortawesome/fontawesome-svg-core'
-import { faUsers, faPeopleGroup, faUser, faPlus, faTrashCan, faMusic, faBaseball, faBaseballBatBall, faXmark, faChevronRight, faChevronDown, faChevronLeft, faArrowRight, faFloppyDisk, faImage, faShirt, faPlay, faPause, faStop, faListUl, faUpload, faCloudArrowDown, faShuffle } from '@fortawesome/free-solid-svg-icons'
+import { faUsers, faPeopleGroup, faUser, faPlus, faTrashCan, faMusic, faBaseball, faBaseballBatBall, faXmark, faChevronRight, faChevronDown, faChevronLeft, faArrowRight, faFloppyDisk, faPen, faImage, faShirt, faPlay, faPause, faStop, faListUl, faUpload, faCloudArrowDown, faShuffle } from '@fortawesome/free-solid-svg-icons'
 import '@fortawesome/fontawesome-svg-core/styles.css'
 
 config.autoAddCss = false
 
-const icons = { team: faUsers, peopleGroup: faPeopleGroup, user: faUser, plus: faPlus, trash: faTrashCan, music: faMusic, ball: faBaseball, league: faBaseballBatBall, close: faXmark, chevronRight: faChevronRight, chevronDown: faChevronDown, chevronLeft: faChevronLeft, arrowRight: faArrowRight, save: faFloppyDisk, image: faImage, jersey: faShirt, play: faPlay, pause: faPause, stop: faStop, playlist: faListUl, upload: faUpload, cloudArrowDown: faCloudArrowDown, shuffle: faShuffle }
+const icons = { team: faUsers, peopleGroup: faPeopleGroup, user: faUser, plus: faPlus, trash: faTrashCan, music: faMusic, ball: faBaseball, league: faBaseballBatBall, close: faXmark, chevronRight: faChevronRight, chevronDown: faChevronDown, chevronLeft: faChevronLeft, arrowRight: faArrowRight, save: faFloppyDisk, edit: faPen, image: faImage, jersey: faShirt, play: faPlay, pause: faPause, stop: faStop, playlist: faListUl, upload: faUpload, cloudArrowDown: faCloudArrowDown, shuffle: faShuffle }
 
 export function Icon({ name = 'team', size = 24 }) {
   return <FontAwesomeIcon className={`app-icon icon-${name}`} icon={icons[name] || icons.team} aria-hidden="true" style={{ width: size, height: size }} />
