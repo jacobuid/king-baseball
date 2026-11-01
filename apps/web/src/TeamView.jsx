@@ -5,8 +5,20 @@ import { createTeamApi } from './teamApi'
 import { teamStorage } from './teamStorage'
 import { createTeamTheme } from './teamTheme'
 import { createMusicApi, mergeMusic } from './musicApi'
-import { audioEnvelopeLevel, ensureAudioGain, resetAudioGain, setAudioGain } from './audioFade'
+import { audioEnvelopeLevel, ensureAudioGain, overlapMusicLevel, resetAudioGain, setAudioGain } from './audioFade'
 import './team-playlist.css'
+
+function shuffleSongIds(ids) {
+  const shuffled = [...ids]
+  for (let index = shuffled.length - 1; index > 0; index--) {
+    const values = new Uint32Array(1)
+    crypto.getRandomValues(values)
+    const swap = values[0] % (index + 1)
+    ;[shuffled[index], shuffled[swap]] = [shuffled[swap], shuffled[index]]
+  }
+  if (shuffled.length > 1 && shuffled[0] === ids[0]) shuffled.push(shuffled.shift())
+  return shuffled
+}
 
 export function TeamView({ userId, onEdit }) {
   const { getToken } = useAuth()
@@ -90,7 +102,8 @@ export function TeamView({ userId, onEdit }) {
         if (introUrl) setTimeout(() => { if (!disposed) introElement.play().catch(() => {}) }, Math.max(0, Number(activeSong.introStart) || 0) * 1000)
         await new Promise(resolve => setTimeout(resolve, Math.max(0, Number(activeSong.musicStart) || 0) * 1000))
         if (disposed) return
-        setAudioGain(graph, audioEnvelopeLevel(0, duration, activeSong.fadeIn !== false, activeSong.fadeOut !== false))
+        const initialOverlapLevel = activeSong.intro ? overlapMusicLevel(Number(activeSong.musicStart) || 0, Number(activeSong.introStart) || 0, Number(activeSong.intro.duration) || 0, Number(activeSong.overlapReduction) || 0) : 1
+        setAudioGain(graph, audioEnvelopeLevel(0, duration, activeSong.fadeIn !== false, activeSong.fadeOut !== false, initialOverlapLevel))
         await element.play()
         clipTimer.current = setInterval(() => {
           const elapsed = element.currentTime - start
@@ -102,8 +115,8 @@ export function TeamView({ userId, onEdit }) {
           }
           const timelineTime = (Number(activeSong.musicStart) || 0) + elapsed
           const introStart = Number(activeSong.introStart) || 0
-          const overlapping = !!activeSong.intro && timelineTime >= introStart && timelineTime < introStart + (Number(activeSong.intro.duration) || 0)
-          setAudioGain(graph, audioEnvelopeLevel(elapsed, duration, activeSong.fadeIn !== false, activeSong.fadeOut !== false, overlapping, Number(activeSong.overlapReduction) || 0))
+          const overlapLevel = activeSong.intro ? overlapMusicLevel(timelineTime, introStart, Number(activeSong.intro.duration) || 0, Number(activeSong.overlapReduction) || 0) : 1
+          setAudioGain(graph, audioEnvelopeLevel(elapsed, duration, activeSong.fadeIn !== false, activeSong.fadeOut !== false, overlapLevel))
         }, 50)
       } catch (error) { if (!disposed) {
         if (error.name === 'NotAllowedError') setError('Tap the play button again to start playback.')
@@ -133,13 +146,7 @@ export function TeamView({ userId, onEdit }) {
       return
     }
     let ids = (team.teamSongs || []).filter(song => song.status === 'ready').map(song => 'team-' + song.id)
-    if (shuffle) {
-      ids = [...ids]
-      for (let index = ids.length - 1; index > 0; index--) {
-        const swap = Math.floor(Math.random() * (index + 1))
-        ;[ids[index], ids[swap]] = [ids[swap], ids[index]]
-      }
-    }
+    if (shuffle) ids = shuffleSongIds(ids)
     queue.current = ids.slice(1)
     setPlaylistMode(true)
     setError('')
@@ -161,6 +168,13 @@ export function TeamView({ userId, onEdit }) {
     const next = queue.current.shift() || null
     if (!next) setPlaylistMode(false)
     setActiveId(next)
+  }
+  function toggleShuffle() {
+    audio.current?.pause()
+    queue.current = []
+    setPlaylistMode(false)
+    if (activeId?.startsWith('team-')) setActiveId(null)
+    setShuffle(value => !value)
   }
   const playable = team?.teamSongs?.some(song => song.status === 'ready')
   const teamSongs = (team?.teamSongs || []).filter(song => song.status === 'ready')
@@ -190,7 +204,7 @@ export function TeamView({ userId, onEdit }) {
         <section className={`view-playlist-panel${playlistOpen ? ' open' : ''}`} aria-label="Team playlist">
           <div className="view-playlist-toolbar">
             <button className="view-playlist" disabled={!playable} aria-label={playlistIsActive && playing ? 'Pause Team Playlist' : 'Play Team Playlist'} onClick={playlist}><span className="view-playlist-icon"><Icon name={playlistIsActive && playing ? 'pause' : 'play'} size={25} /></span><span><strong>Team Playlist</strong><small>{playable ? `${teamSongs.length} ${teamSongs.length === 1 ? 'song' : 'songs'} · ${shuffle ? 'Shuffle play' : 'Play in order'}` : 'No team songs yet. Edit this team to add songs.'}</small></span></button>
-            <button className={`view-playlist-tool${shuffle ? ' active' : ''}`} disabled={!playable} aria-label={`${shuffle ? 'Turn off' : 'Turn on'} shuffle`} aria-pressed={shuffle} onClick={() => setShuffle(value => !value)}><Icon name="shuffle" size={20} /></button>
+            <button className={`view-playlist-tool${shuffle ? ' active' : ''}`} disabled={!playable} aria-label={`${shuffle ? 'Turn off' : 'Turn on'} shuffle`} aria-pressed={shuffle} onClick={toggleShuffle}><Icon name="shuffle" size={20} /></button>
             <button className="view-playlist-tool playlist-expand" disabled={!playable} aria-label={`${playlistOpen ? 'Hide' : 'Show'} team songs`} aria-expanded={playlistOpen} onClick={() => setPlaylistOpen(value => !value)}><Icon name="chevronDown" size={19} /></button>
           </div>
           {playlistOpen && <div className="view-playlist-songs">{teamSongs.map((song, index) => {

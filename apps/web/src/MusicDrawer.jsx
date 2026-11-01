@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { Icon, Modal } from './ui'
-import { audioEnvelopeLevel, ensureAudioGain, resetAudioGain, setAudioGain } from './audioFade'
+import { audioEnvelopeLevel, ensureAudioGain, overlapMusicLevel, resetAudioGain, setAudioGain } from './audioFade'
 
 const time = seconds => Number.isFinite(seconds) ? `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, '0')}` : ''
 const audioTypes = { mp3: 'audio/mpeg', m4a: 'audio/mp4', mp4: 'audio/mp4', aac: 'audio/aac', wav: 'audio/wav' }
@@ -388,7 +388,8 @@ export function MusicDrawer({ api, target, player, onClose, onAssigned }) {
       if (intro) setTimeout(() => { if (active.current && sequence === previewSequence.current) introElement.play().catch(() => {}) }, introStart * 1000)
       await new Promise(resolve => setTimeout(resolve, (musicOnly ? 0 : musicStart) * 1000))
       if (!active.current || sequence !== previewSequence.current) return
-      setAudioGain(graph, audioEnvelopeLevel(0, clipDuration, fadeIn, fadeOut))
+      const initialOverlapLevel = !musicOnly && announcerEnabled ? overlapMusicLevel(musicStart, introStart, Number(intro?.duration) || 0, overlapReduction) : 1
+      setAudioGain(graph, audioEnvelopeLevel(0, clipDuration, fadeIn, fadeOut, initialOverlapLevel))
       await element.play()
       setPlayingTrackId(track.id)
       clipTimer.current = setInterval(() => {
@@ -400,8 +401,8 @@ export function MusicDrawer({ api, target, player, onClose, onAssigned }) {
           return
         }
         const timelineTime = (musicOnly ? 0 : musicStart) + elapsed
-        const overlapping = !musicOnly && announcerEnabled && timelineTime >= introStart && timelineTime < introStart + (Number(intro?.duration) || 0)
-        setAudioGain(graph, audioEnvelopeLevel(elapsed, clipDuration, fadeIn, fadeOut, overlapping, overlapReduction))
+        const overlapLevel = !musicOnly && announcerEnabled ? overlapMusicLevel(timelineTime, introStart, Number(intro?.duration) || 0, overlapReduction) : 1
+        setAudioGain(graph, audioEnvelopeLevel(elapsed, clipDuration, fadeIn, fadeOut, overlapLevel))
       }, 50)
     } catch (e) {
       if (active.current && sequence === previewSequence.current) { setError(e.message || 'The walk-up preview could not play.'); setClipPlaying(false) }

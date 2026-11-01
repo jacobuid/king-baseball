@@ -39,10 +39,22 @@ export function setAudioGain(graph, value) {
   graph.gain.gain.setValueAtTime(Math.max(.0001, Math.min(1, value)), graph.context.currentTime)
 }
 
-export function audioEnvelopeLevel(elapsed, duration, fadeIn, fadeOut, overlapping = false, overlapReduction = 0) {
+export function overlapMusicLevel(timelineTime, announcementStart, announcementDuration, overlapReduction) {
+  const reduction = Math.max(0, Math.min(.9, overlapReduction))
+  if (!reduction || !announcementDuration) return 1
+  const attack = .25
+  const release = 1
+  const end = announcementStart + announcementDuration
+  if (timelineTime < announcementStart - attack || timelineTime >= end + release) return 1
+  if (timelineTime < announcementStart) return 1 - reduction * ((timelineTime - (announcementStart - attack)) / attack)
+  if (timelineTime < end) return 1 - reduction
+  return 1 - reduction + reduction * ((timelineTime - end) / release)
+}
+
+export function audioEnvelopeLevel(elapsed, duration, fadeIn, fadeOut, overlapLevel = 1) {
   const length = Math.max(.1, Number(duration) || 0)
   const fadeLength = Math.min(1.5, length / 3)
   const remaining = length - elapsed
   const fadeLevel = Math.max(0, Math.min(1, fadeIn ? elapsed / fadeLength : 1, fadeOut ? remaining / fadeLength : 1))
-  return fadeLevel * (overlapping ? 1 - Math.max(0, Math.min(.9, overlapReduction)) : 1)
+  return fadeLevel * Math.max(.1, Math.min(1, overlapLevel))
 }
