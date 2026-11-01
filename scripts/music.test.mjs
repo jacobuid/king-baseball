@@ -8,15 +8,17 @@ import { mergeMusic } from '../apps/web/src/musicApi.js'
 const id = '11111111-1111-4111-8111-111111111111'
 const other = '22222222-2222-4222-8222-222222222222'
 const player = '33333333-3333-4333-8333-333333333333'
+const intro = '44444444-4444-4444-8444-444444444444'
 function setup() {
   const sqlite = new DatabaseSync(':memory:')
   sqlite.exec(readFileSync(new URL('../services/api/migrations/0008_music.sql', import.meta.url), 'utf8'))
   sqlite.exec(readFileSync(new URL('../services/api/migrations/0009_music_uploads.sql', import.meta.url), 'utf8'))
+  sqlite.exec(readFileSync(new URL('../services/api/migrations/0010_music_track_kind.sql', import.meta.url), 'utf8'))
   const env = { DB: { prepare(sql) {
     let args = []
     return { bind(...values) { args = values; return this }, async first() { return sqlite.prepare(sql).get(...args) || null }, async all() { return { results: sqlite.prepare(sql).all(...args) } }, async run() { return sqlite.prepare(sql).run(...args) } }
   } }, MUSIC_SERVICE_URL: 'https://music.example', MUSIC_SERVICE_TOKEN: 'test-token', B2_MUSIC_KEY_ID: 'test', B2_MUSIC_APPLICATION_KEY: 'test-secret', B2_ENDPOINT: 'https://s3.us-west-004.backblazeb2.com', B2_BUCKET: 'test' }
-  const insert = (trackId, owner, status = 'ready', video = 'abcdefghijk') => sqlite.prepare('INSERT INTO music_tracks(id,owner_user_id,video_id,title,object_key,status) VALUES(?,?,?,?,?,?)').run(trackId, owner, video, 'Song', `music/${trackId}.m4a`, status)
+  const insert = (trackId, owner, status = 'ready', video = 'abcdefghijk', kind = 'song') => sqlite.prepare('INSERT INTO music_tracks(id,owner_user_id,video_id,title,object_key,status,duration,kind) VALUES(?,?,?,?,?,?,?,?)').run(trackId, owner, video, kind === 'intro' ? 'Intro' : 'Song', `music/${trackId}.m4a`, status, kind === 'intro' ? 5 : 120, kind)
   return { env, sqlite, insert }
 }
 const request = (path = '', body, method = body === undefined ? 'GET' : 'POST', headers = {}) => new Request('https://api.example' + path, { method, headers: { 'Content-Type': 'application/json', ...headers }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) })
@@ -36,16 +38,16 @@ test('music drawer renders the upload control directly below search', () => {
 test('library, assignments, and playback are isolated by account', async () => {
   const { env, sqlite, insert } = setup()
   try {
-    insert(id, 'alice'); insert(other, 'bob')
+    insert(id, 'alice'); insert(other, 'bob'); insert(intro, 'alice', 'ready', 'upload:intro', 'intro')
     const library = await (await handleMusicRequest(request('/api/music'), env, 'alice')).json()
-    assert.deepEqual(library.tracks.map(t => t.id), [id])
+    assert.deepEqual(new Set(library.tracks.map(t => t.id)), new Set([id, intro]))
     assert.equal(library.tracks[0].object_key, undefined)
-    assert.equal((await handleMusicRequest(request('/api/music/assign', { target: player, tracks: [other] }, 'PUT'), env, 'alice')).status, 400)
+    assert.equal((await handleMusicRequest(request('/api/music/assign', { target: player, tracks: [{ id: other, start: 0, duration: 15, introId: intro }] }, 'PUT'), env, 'alice')).status, 400)
     assert.equal((await handleMusicRequest(request(`/api/music/${other}/play`, {}), env, 'alice')).status, 404)
-    assert.equal((await handleMusicRequest(request('/api/music/assign', { target: player, tracks: [id] }, 'PUT'), env, 'alice')).status, 200)
-    assert.equal((await handleMusicRequest(request('/api/music/assign', { target: player, tracks: [id, other] }, 'PUT'), env, 'alice')).status, 400)
+    assert.equal((await handleMusicRequest(request('/api/music/assign', { target: player, tracks: [{ id, start: 12.5, duration: 15, introId: intro }] }, 'PUT'), env, 'alice')).status, 200)
+    assert.equal((await handleMusicRequest(request('/api/music/assign', { target: player, tracks: [{ id, start: 115, duration: 15, introId: intro }] }, 'PUT'), env, 'alice')).status, 400)
     const result = await (await handleMusicRequest(request('/api/music'), env, 'alice')).json()
-    assert.deepEqual(result.assignments[player], [id])
+    assert.deepEqual(result.assignments[player], [{ id, start: 12.5, duration: 15, introId: intro }])
     assert.deepEqual((await (await handleMusicRequest(request('/api/music'), env, 'bob')).json()).assignments, {})
   } finally { sqlite.close() }
 })

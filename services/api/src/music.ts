@@ -5,14 +5,15 @@ export interface MusicEnv {
   B2_MUSIC_KEY_ID: string; B2_MUSIC_APPLICATION_KEY: string
   MUSIC_SERVICE_URL: string; MUSIC_SERVICE_TOKEN: string
 }
-type Track = { id: string; owner_user_id: string; video_id: string; title: string; artist: string; status: string; object_key: string; content_type: string; duration: number | null; error: string | null }
+type Track = { id: string; owner_user_id: string; video_id: string; title: string; artist: string; status: string; object_key: string; content_type: string; duration: number | null; error: string | null; kind: 'song' | 'intro' }
+type PlayerAssignment = { id: string; start: number; duration: number; introId?: string }
 const json = (data: unknown, status = 200) => Response.json(data, { status, headers: { 'Cache-Control': 'no-store' } })
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-const publicTrack = (row: Track) => ({ id: row.id, videoId: row.video_id, title: row.title, artist: row.artist, status: row.status, duration: row.duration, error: row.error })
-const uploadTypes: Record<string, string> = { 'audio/mpeg': 'mp3', 'audio/mp4': 'm4a', 'audio/x-m4a': 'm4a', 'audio/aac': 'aac', 'audio/wav': 'wav', 'audio/x-wav': 'wav' }
+const publicTrack = (row: Track) => ({ id: row.id, videoId: row.video_id, title: row.title, artist: row.artist, status: row.status, duration: row.duration, error: row.error, kind: row.kind || 'song' })
+const uploadTypes: Record<string, string> = { 'audio/mpeg': 'mp3', 'audio/mp4': 'm4a', 'audio/x-m4a': 'm4a', 'audio/aac': 'aac', 'audio/wav': 'wav', 'audio/x-wav': 'wav', 'audio/webm': 'webm', 'audio/ogg': 'ogg' }
 function configured(env: MusicEnv) { return !!(env.MUSIC_SERVICE_URL && env.MUSIC_SERVICE_TOKEN && env.B2_MUSIC_KEY_ID && env.B2_MUSIC_APPLICATION_KEY) }
 function objectUrl(env: MusicEnv, key: string) {
-  if (!/^music\/[a-f0-9-]+\.(m4a|mp3|aac|wav)$/.test(key)) throw new Error('Invalid music key')
+  if (!/^music\/[a-f0-9-]+\.(m4a|mp3|aac|wav|webm|ogg)$/.test(key)) throw new Error('Invalid music key')
   return `${env.B2_ENDPOINT.replace(/\/$/, '')}/${env.B2_BUCKET}/${key}`
 }
 function signer(env: MusicEnv) { return new AwsClient({ accessKeyId: env.B2_MUSIC_KEY_ID, secretAccessKey: env.B2_MUSIC_APPLICATION_KEY, service: 's3', region: new URL(env.B2_ENDPOINT).hostname.split('.')[1] }) }
@@ -89,18 +90,19 @@ export async function handleMusicRequest(request: Request, env: MusicEnv, userId
     if (!configured(env)) return json({ error: 'Music uploads are not configured yet.' }, 503)
     const raw = await request.text()
     if (raw.length > 4096) return json({ error: 'Too large' }, 413)
-    const body = JSON.parse(raw) as { title?: string; artist?: string; contentType?: string; size?: number; duration?: number }
+    const body = JSON.parse(raw) as { title?: string; artist?: string; contentType?: string; size?: number; duration?: number; kind?: string }
     const title = body.title?.trim()
     const artist = body.artist?.trim() || ''
     const contentType = body.contentType?.toLowerCase() || ''
     const extension = uploadTypes[contentType]
+    const kind = body.kind === 'intro' ? 'intro' : 'song'
     if (!title || title.length > 200 || artist.length > 100) return json({ error: 'Enter a valid song title' }, 400)
-    if (!extension) return json({ error: 'Choose an MP3, M4A, AAC, or WAV audio file' }, 400)
+    if (!extension) return json({ error: 'Choose a supported audio file' }, 400)
     if (!Number.isInteger(body.size) || body.size! <= 0 || body.size! > 50 * 1024 * 1024) return json({ error: 'Audio files must be 50 MB or smaller' }, 400)
-    if (!Number.isFinite(body.duration) || body.duration! <= 0 || body.duration! > 1200) return json({ error: 'Audio must be 20 minutes or shorter' }, 400)
+    if (!Number.isFinite(body.duration) || body.duration! <= 0 || body.duration! > (kind === 'intro' ? 30 : 1200)) return json({ error: kind === 'intro' ? 'Intro audio must be 30 seconds or shorter' : 'Audio must be 20 minutes or shorter' }, 400)
     const id = crypto.randomUUID()
     const objectKey = `music/${id}.${extension}`
-    const inserted = await env.DB.prepare("INSERT INTO music_tracks(id,owner_user_id,video_id,title,artist,status,object_key,content_type,duration) SELECT ?,?,?,?,?,?,?,?,? WHERE (SELECT count(*) FROM music_tracks WHERE owner_user_id=?) < 500 RETURNING *").bind(id, userId, `upload:${id}`, title, artist, 'processing', objectKey, contentType, body.duration, userId).first<Track>()
+    const inserted = await env.DB.prepare("INSERT INTO music_tracks(id,owner_user_id,video_id,title,artist,status,object_key,content_type,duration,kind) SELECT ?,?,?,?,?,?,?,?,?,? WHERE (SELECT count(*) FROM music_tracks WHERE owner_user_id=?) < 500 RETURNING *").bind(id, userId, `upload:${id}`, title, artist, 'processing', objectKey, contentType, body.duration, kind, userId).first<Track>()
     if (!inserted) return json({ error: 'Music library limit reached' }, 429)
     try {
       const signed = await signer(env).sign(`${objectUrl(env, objectKey)}?X-Amz-Expires=900`, { method: 'PUT', headers: { 'Content-Type': contentType }, aws: { signQuery: true } })
@@ -128,12 +130,24 @@ export async function handleMusicRequest(request: Request, env: MusicEnv, userId
     if (raw.length > 16000) return json({ error: 'Too large' }, 413)
     const body = JSON.parse(raw) as { target?: string; tracks?: unknown[] }
     if (body.target !== 'team' && !uuid.test(body.target || '')) return json({ error: 'Invalid assignment' }, 400)
-    if (!Array.isArray(body.tracks) || body.tracks.length > (body.target === 'team' ? 100 : 1) || body.tracks.some(id => typeof id !== 'string' || !uuid.test(id)) || new Set(body.tracks).size !== body.tracks.length) return json({ error: 'Invalid track list' }, 400)
-    for (const id of body.tracks) {
-      const owned = await env.DB.prepare("SELECT id FROM music_tracks WHERE id=? AND owner_user_id=? AND status='ready'").bind(id, userId).first()
+    if (!Array.isArray(body.tracks) || body.tracks.length > (body.target === 'team' ? 100 : 1)) return json({ error: 'Invalid track list' }, 400)
+    const teamEntries = body.target === 'team' ? body.tracks : []
+    const playerEntries = body.target === 'team' ? [] : body.tracks
+    if (teamEntries.some(id => typeof id !== 'string' || !uuid.test(id)) || new Set(teamEntries).size !== teamEntries.length) return json({ error: 'Invalid track list' }, 400)
+    if (playerEntries.some(entry => typeof entry !== 'object' || entry === null || !uuid.test((entry as PlayerAssignment).id) || !Number.isFinite((entry as PlayerAssignment).start) || !Number.isFinite((entry as PlayerAssignment).duration))) return json({ error: 'Choose a valid walk-up clip' }, 400)
+    const normalized: (string | PlayerAssignment)[] = body.target === 'team' ? teamEntries as string[] : playerEntries.map(entry => ({ id: (entry as PlayerAssignment).id, start: Math.round((entry as PlayerAssignment).start * 10) / 10, duration: Math.round((entry as PlayerAssignment).duration * 10) / 10, ...((entry as PlayerAssignment).introId ? { introId: (entry as PlayerAssignment).introId } : {}) }))
+    for (const entry of normalized) {
+      const id = typeof entry === 'string' ? entry : entry.id
+      const owned = await env.DB.prepare("SELECT id,duration,kind FROM music_tracks WHERE id=? AND owner_user_id=? AND status='ready'").bind(id, userId).first<{ id: string; duration: number | null; kind: string }>()
       if (!owned) return json({ error: 'Choose an imported song from your library' }, 400)
+      if (typeof entry !== 'string' && (owned.kind !== 'song' || entry.start < 0 || entry.duration < 3 || entry.duration > 60 || !owned.duration || entry.start + entry.duration > owned.duration + .25)) return json({ error: 'Choose a clip between 3 and 60 seconds within the song' }, 400)
+      if (typeof entry !== 'string') {
+        if (!entry.introId || !uuid.test(entry.introId)) return json({ error: 'Record or upload an announcer intro' }, 400)
+        const intro = await env.DB.prepare("SELECT id FROM music_tracks WHERE id=? AND owner_user_id=? AND status='ready' AND kind='intro'").bind(entry.introId, userId).first()
+        if (!intro) return json({ error: 'Record or upload a valid announcer intro' }, 400)
+      }
     }
-    await env.DB.prepare('INSERT INTO music_assignments(owner_user_id,target,tracks_json) VALUES(?,?,?) ON CONFLICT(owner_user_id,target) DO UPDATE SET tracks_json=excluded.tracks_json').bind(userId, body.target, JSON.stringify(body.tracks)).run()
+    await env.DB.prepare('INSERT INTO music_assignments(owner_user_id,target,tracks_json) VALUES(?,?,?) ON CONFLICT(owner_user_id,target) DO UPDATE SET tracks_json=excluded.tracks_json').bind(userId, body.target, JSON.stringify(normalized)).run()
     return json({ ok: true })
   }
   const deleteTrack = path.match(/^\/api\/music\/([a-f0-9-]+)$/i)
@@ -148,8 +162,13 @@ export async function handleMusicRequest(request: Request, env: MusicEnv, userId
     const assignments = await env.DB.prepare('SELECT target,tracks_json FROM music_assignments WHERE owner_user_id=?').bind(userId).all<{ target: string; tracks_json: string }>()
     for (const assignment of assignments.results) {
       const tracks = JSON.parse(assignment.tracks_json) as unknown[]
-      const filtered = tracks.filter(id => id !== track.id)
-      if (filtered.length !== tracks.length) await env.DB.prepare('UPDATE music_assignments SET tracks_json=? WHERE owner_user_id=? AND target=?').bind(JSON.stringify(filtered), userId, assignment.target).run()
+      const filtered = tracks.map<unknown>(entry => {
+        if (typeof entry === 'string') return entry === track.id ? null : entry
+        const value = entry as PlayerAssignment
+        if (value.id === track.id) return null
+        return value.introId === track.id ? { ...value, introId: undefined } : value
+      }).filter(entry => entry !== null)
+      if (JSON.stringify(filtered) !== JSON.stringify(tracks)) await env.DB.prepare('UPDATE music_assignments SET tracks_json=? WHERE owner_user_id=? AND target=?').bind(JSON.stringify(filtered), userId, assignment.target).run()
     }
     return json({ ok: true })
   }

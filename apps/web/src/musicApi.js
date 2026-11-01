@@ -17,7 +17,11 @@ export function createMusicApi(getToken) {
 export function mergeMusic(team, local, music) {
   const byId = new Map(music.tracks.map(track => [track.id, track]))
   return { ...team, teamSongs: (music.assignments.team || []).map(id => byId.get(id)).filter(Boolean), players: team.players.map(player => {
-    const id = music.assignments[player.id]?.[0]
-    return { ...player, song: id ? byId.get(id) || null : Object.hasOwn(music.assignments, player.id) ? null : local?.players?.find(p => p.id === player.id)?.song || null }
+    const assignment = music.assignments[player.id]?.[0]
+    const id = typeof assignment === 'string' ? assignment : assignment?.id
+    const track = id ? byId.get(id) : null
+    const intro = typeof assignment === 'object' && assignment.introId ? byId.get(assignment.introId) : null
+    const song = track ? { ...track, clipStart: typeof assignment === 'object' ? assignment.start : 0, clipDuration: typeof assignment === 'object' ? assignment.duration : Math.min(15, track.duration || 15), intro: intro || null } : null
+    return { ...player, song: song || (Object.hasOwn(music.assignments, player.id) ? null : local?.players?.find(p => p.id === player.id)?.song || null) }
   }) }
 }
