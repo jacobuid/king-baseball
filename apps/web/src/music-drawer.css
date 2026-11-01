@@ -396,6 +396,7 @@
 .walkup-fades .walkup-switch { flex: 0 0 42px; width: 42px; height: 25px; }
 .walkup-fades .walkup-switch span { width: 17px; height: 17px; }
 .walkup-fades .walkup-switch.on span { transform: translateX(17px); }
+.build-walkup-preview { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; min-height: 48px; margin-top: 12px; border-radius: 11px; font-size: 14px; font-weight: 800; }
 @keyframes countdown-pop { from { opacity: .25; transform: scale(.55); } to { opacity: 1; transform: scale(1); } }
 @keyframes recording-pulse { 50% { opacity: .35; transform: scale(.82); } }
 @keyframes music-search-spin { to { transform: rotate(360deg); } }

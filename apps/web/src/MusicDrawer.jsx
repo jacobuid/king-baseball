@@ -57,7 +57,7 @@ function WalkupClipEditor({ track, start, duration, playing, busy, previewDisabl
     <label className="walkup-range"><span><strong>Song starts at</strong><output>{time(start)}</output></span><input type="range" min="0" max={maxStart} step="0.5" value={start} onChange={event => onStart(clampClip(track, event.target.value, duration))} /></label>
     <label className="walkup-range"><span><strong>Clip length</strong><output>{Math.round(duration)} sec</output></span><input type="range" min="3" max={maxDuration} step="1" value={duration} onChange={event => onDuration(clampClip(track, start, event.target.value))} /></label>
     <p className="walkup-clip-summary">Uses {time(start)}–{time(start + duration)} from the selected song.</p>
-    <button type="button" className="walkup-preview button-secondary" disabled={busy || previewDisabled} onClick={onPreview}><Icon name={playing ? 'stop' : 'play'} size={16} />{playing ? 'Stop preview' : 'Preview walk-up'}</button>
+    <button type="button" className="walkup-preview button-secondary" disabled={busy || previewDisabled} onClick={onPreview}><Icon name={playing ? 'stop' : 'play'} size={16} />{playing ? 'Stop preview' : 'Preview music clip'}</button>
   </section>
 }
 function TimingClip({ label, icon, start, duration, scale, maxStart, onChange }) {
@@ -70,11 +70,11 @@ function TimingClip({ label, icon, start, duration, scale, maxStart, onChange })
   const stop = event => { if (drag.current) event.currentTarget.releasePointerCapture?.(event.pointerId); drag.current = null }
   return <div className="walkup-timeline-row"><span className="walkup-timeline-label"><Icon name={icon} size={14} />{label}</span><div className="walkup-timeline-lane"><button type="button" className={`walkup-timeline-clip ${icon}`} style={{ left: `${start / scale * 100}%`, width: `${Math.max(8, duration / scale * 100)}%` }} role="slider" aria-label={`${label} starts at ${time(start)}`} aria-valuemin="0" aria-valuemax={maxStart} aria-valuenow={start} onPointerDown={event => { event.currentTarget.setPointerCapture(event.pointerId); drag.current = { x: event.clientX, width: event.currentTarget.parentElement.clientWidth, start } }} onPointerMove={move} onPointerUp={stop} onPointerCancel={stop} onKeyDown={event => { if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') { event.preventDefault(); onChange(Math.min(maxStart, Math.max(0, start + (event.key === 'ArrowRight' ? .5 : -.5)))) } }}><span>{time(start)}</span><strong>{time(duration)}</strong></button></div></div>
 }
-function BuildWalkup({ introDuration, musicDuration, introStart, musicStart, fadeIn, fadeOut, onIntroStart, onMusicStart, onFadeIn, onFadeOut }) {
+function BuildWalkup({ introDuration, musicDuration, introStart, musicStart, fadeIn, fadeOut, playing, busy, onIntroStart, onMusicStart, onFadeIn, onFadeOut, onPreview }) {
   const maxStart = 15
   const scale = Math.max(20, introDuration + maxStart, musicDuration + maxStart)
   const total = Math.max(introStart + introDuration, musicStart + musicDuration)
-  return <section className="build-walkup"><div className="build-walkup-heading"><span className="walkup-clip-icon"><Icon name="music" size={18} /></span><div><h2>Build Walk-up</h2><p>Drag either clip to control its timing and overlap.</p></div></div><div className="walkup-timeline" style={{ '--timeline-seconds': scale }}><div className="walkup-timeline-ruler"><span>0:00</span><span>{time(scale / 2)}</span><span>{time(scale)}</span></div><TimingClip label="Announcer" icon="microphone" start={introStart} duration={introDuration} scale={scale} maxStart={maxStart} onChange={onIntroStart} /><TimingClip label="Music" icon="music" start={musicStart} duration={musicDuration} scale={scale} maxStart={maxStart} onChange={onMusicStart} /></div><div className="walkup-timing-summary"><span>Total walk-up</span><strong>{time(total)}</strong></div><div className="walkup-fades"><div><span><strong>Fade in</strong><small>Ease the music in</small></span><button type="button" className={`walkup-switch${fadeIn ? ' on' : ''}`} role="switch" aria-checked={fadeIn} onClick={() => onFadeIn(!fadeIn)}><span /></button></div><div><span><strong>Fade out</strong><small>Ease the music out</small></span><button type="button" className={`walkup-switch${fadeOut ? ' on' : ''}`} role="switch" aria-checked={fadeOut} onClick={() => onFadeOut(!fadeOut)}><span /></button></div></div></section>
+  return <section className="build-walkup"><div className="build-walkup-heading"><span className="walkup-clip-icon"><Icon name="music" size={18} /></span><div><h2>Build Walk-up</h2><p>Drag either clip to control its timing and overlap.</p></div></div><div className="walkup-timeline" style={{ '--timeline-seconds': scale }}><div className="walkup-timeline-ruler"><span>0:00</span><span>{time(scale / 2)}</span><span>{time(scale)}</span></div><TimingClip label="Announcer" icon="microphone" start={introStart} duration={introDuration} scale={scale} maxStart={maxStart} onChange={onIntroStart} /><TimingClip label="Music" icon="music" start={musicStart} duration={musicDuration} scale={scale} maxStart={maxStart} onChange={onMusicStart} /></div><div className="walkup-timing-summary"><span>Total walk-up</span><strong>{time(total)}</strong></div><div className="walkup-fades"><div><span><strong>Fade in</strong><small>Ease the music in</small></span><button type="button" className={`walkup-switch${fadeIn ? ' on' : ''}`} role="switch" aria-checked={fadeIn} onClick={() => onFadeIn(!fadeIn)}><span /></button></div><div><span><strong>Fade out</strong><small>Ease the music out</small></span><button type="button" className={`walkup-switch${fadeOut ? ' on' : ''}`} role="switch" aria-checked={fadeOut} onClick={() => onFadeOut(!fadeOut)}><span /></button></div></div><button type="button" className="build-walkup-preview button-secondary" disabled={busy} onClick={onPreview}><Icon name={playing ? 'stop' : 'play'} size={16} />{playing ? 'Stop full preview' : 'Preview full walk-up'}</button></section>
 }
 export function MusicDrawer({ api, target, player, onClose, onAssigned }) {
   const [library, setLibrary] = useState(null)
@@ -351,7 +351,7 @@ export function MusicDrawer({ api, target, player, onClose, onAssigned }) {
     } catch (e) { if (active.current) setError(e.message) }
     finally { if (active.current) setBusy(false) }
   }
-  async function previewWalkup(track) {
+  async function previewWalkup(track, musicOnly = false) {
     const element = preview.current
     const introElement = introPreview.current
     if (!element || !introElement) return
@@ -366,8 +366,8 @@ export function MusicDrawer({ api, target, player, onClose, onAssigned }) {
     introElement.pause(); element.pause(); element.volume = 1
     setPlayingTrackId(null); setClipPlaying(true); setError('')
     try {
-      const intro = announcerEnabled ? library.tracks.find(item => item.id === introTrackId) : null
-      if (announcerEnabled && !intro) throw new Error('Record or upload the announcer intro first.')
+      const intro = !musicOnly && announcerEnabled ? library.tracks.find(item => item.id === introTrackId) : null
+      if (!musicOnly && announcerEnabled && !intro) throw new Error('Record or upload the announcer intro first.')
       const [introPlayback, songPlayback] = await Promise.all([intro ? api(`/${intro.id}/play`, {}) : null, api(`/${track.id}/play`, {})])
       if (!active.current || sequence !== previewSequence.current) return
       loadedPreviewId.current = track.id
@@ -381,7 +381,7 @@ export function MusicDrawer({ api, target, player, onClose, onAssigned }) {
       if (!active.current || sequence !== previewSequence.current) return
       element.currentTime = clipStart; element.volume = fadeIn ? 0 : 1
       if (intro) setTimeout(() => { if (active.current && sequence === previewSequence.current) introElement.play().catch(() => {}) }, introStart * 1000)
-      await new Promise(resolve => setTimeout(resolve, musicStart * 1000))
+      await new Promise(resolve => setTimeout(resolve, (musicOnly ? 0 : musicStart) * 1000))
       if (!active.current || sequence !== previewSequence.current) return
       await element.play()
       setPlayingTrackId(track.id)
@@ -465,7 +465,7 @@ export function MusicDrawer({ api, target, player, onClose, onAssigned }) {
       </section>
       <section className={`walkup-section${musicOpen ? ' open' : ''}`}>
         <SectionToggle label="Music" checked={musicEnabled} open={musicOpen} onToggle={toggleMusic} onOpen={() => setMusicOpen(value => !value)} />
-        {announcerEnabled && musicEnabled && introTrack && clipTrack && <BuildWalkup introDuration={Number(introTrack.duration) || 1} musicDuration={clipDuration} introStart={introStart} musicStart={musicStart} fadeIn={fadeIn} fadeOut={fadeOut} onIntroStart={setIntroStart} onMusicStart={setMusicStart} onFadeIn={setFadeIn} onFadeOut={setFadeOut} />}
+        {announcerEnabled && musicEnabled && introTrack && clipTrack && <BuildWalkup introDuration={Number(introTrack.duration) || 1} musicDuration={clipDuration} introStart={introStart} musicStart={musicStart} fadeIn={fadeIn} fadeOut={fadeOut} playing={clipPlaying} busy={busy} onIntroStart={setIntroStart} onMusicStart={setMusicStart} onFadeIn={setFadeIn} onFadeOut={setFadeOut} onPreview={() => previewWalkup(clipTrack)} />}
         {musicOpen && <div className="walkup-section-body">
           <div className="walkup-subhead"><h2>Get Music</h2><button type="button" className="walkup-add-music" aria-label={`${getMusicOpen ? 'Hide' : 'Show'} music search and upload`} aria-expanded={getMusicOpen} onClick={() => setGetMusicOpen(value => !value)}><Icon name={getMusicOpen ? 'close' : 'plus'} size={18} /></button></div>
           {getMusicOpen && <div className="walkup-get-music">
@@ -484,7 +484,7 @@ export function MusicDrawer({ api, target, player, onClose, onAssigned }) {
           <h2 className="music-library-heading">Your Music</h2>
           {!songTracks.length && <p>Use + above to search for or upload your first song.</p>}
           {songTracks.map(track => <article key={track.id} className={`music-library-track${clipTrackId === track.id ? ' selected' : ''}`}>{track.status === 'ready' && <input className="walkup-song-radio" type="radio" name="walkup-song" value={track.id} checked={clipTrackId === track.id} aria-label={`Use ${track.title} for this walk-up`} onChange={() => { chooseClip(track); setMusicEnabled(true) }} />}<div><strong>{track.title}</strong><small>{track.artist} {time(track.duration)}{track.status !== 'ready' && ` · ${track.status}`}</small>{track.status === 'failed' && <small>{track.error}</small>}</div>{track.status === 'ready' ? <button type="button" className={`music-preview button-tertiary${playingTrackId === track.id ? ' playing' : ''}`} aria-label={`${playingTrackId === track.id ? 'Pause' : 'Play'} ${track.title}`} onClick={() => listen(track)}><Icon name={playingTrackId === track.id ? 'pause' : 'play'} size={14} /></button> : track.status === 'failed' ? <button type="button" className="button-secondary" disabled={busy} onClick={() => setConfirmation({ type: 'import', track })}>Retry</button> : <span className="music-pending" role="status">Importing…</span>}{['ready', 'failed'].includes(track.status) && <button type="button" className="music-delete-button" disabled={busy} aria-label={`Delete ${track.title} from Your music`} onClick={() => setConfirmation({ type: 'delete', track })}><Icon name="trash" size={15} /></button>}</article>)}
-          {musicEnabled && <WalkupClipEditor track={clipTrack} start={clipStart} duration={clipDuration} playing={clipPlaying} busy={busy} previewDisabled={!playerReady} onStart={clip => { setClipStart(clip.start); setClipDuration(clip.duration) }} onDuration={clip => setClipDuration(clip.duration)} onPreview={() => previewWalkup(clipTrack)} />}
+          {musicEnabled && <WalkupClipEditor track={clipTrack} start={clipStart} duration={clipDuration} playing={clipPlaying} busy={busy} previewDisabled={!clipTrack} onStart={clip => { setClipStart(clip.start); setClipDuration(clip.duration) }} onDuration={clip => setClipDuration(clip.duration)} onPreview={() => previewWalkup(clipTrack, true)} />}
         </div>}
       </section>
       <button type="button" className="sheet-save button-primary" disabled={busy || !playerReady} onClick={saveWalkup}><Icon name="save" size={16} />{busy ? 'Saving…' : 'Save Walk-up'}</button>
