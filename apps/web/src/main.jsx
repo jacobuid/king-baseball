@@ -7,6 +7,7 @@ import { Icon } from './ui'
 import { AppLoadingProvider, StartupReady, useAppLoading } from './LoadingScreen'
 import './style.css'
 import './theme.css'
+import './zoom.css'
 
 const key = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
 const appUrl = new URL(import.meta.env.BASE_URL, window.location.origin).href
