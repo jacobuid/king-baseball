@@ -15,6 +15,26 @@ function audioMetadata(file) {
     audio.src = url
   })
 }
+async function playRecordingCue() {
+  const AudioContext = window.AudioContext || window.webkitAudioContext
+  if (!AudioContext) { await new Promise(resolve => setTimeout(resolve, 450)); return }
+  const context = new AudioContext()
+  try {
+    await context.resume()
+    const oscillator = context.createOscillator()
+    const gain = context.createGain()
+    oscillator.type = 'sine'
+    oscillator.frequency.setValueAtTime(880, context.currentTime)
+    oscillator.frequency.exponentialRampToValueAtTime(1320, context.currentTime + .12)
+    gain.gain.setValueAtTime(.0001, context.currentTime)
+    gain.gain.exponentialRampToValueAtTime(.22, context.currentTime + .02)
+    gain.gain.exponentialRampToValueAtTime(.0001, context.currentTime + .38)
+    oscillator.connect(gain).connect(context.destination)
+    oscillator.start()
+    oscillator.stop(context.currentTime + .4)
+    await new Promise(resolve => setTimeout(resolve, 520))
+  } finally { await context.close().catch(() => {}) }
+}
 const assignmentId = entry => typeof entry === 'string' ? entry : entry?.id
 const clampClip = (track, start, duration) => {
   const total = Math.max(3, Number(track?.duration) || 15)
@@ -208,7 +228,7 @@ export function MusicDrawer({ api, target, player, onClose, onAssigned }) {
   }
   async function toggleRecording() {
     if (recorder.current?.state === 'recording') { recorder.current.stop(); return }
-    setError(''); setNotice('')
+    setError(''); setNotice('Get ready…'); setBusy(true)
     try {
       if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) throw new Error('Microphone recording is not supported in this browser. Use Upload intro instead.')
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
@@ -228,10 +248,12 @@ export function MusicDrawer({ api, target, player, onClose, onAssigned }) {
         finally { if (active.current) setBusy(false) }
       }
       recorder.current = instance
+      await playRecordingCue()
+      if (!active.current) { stream.getTracks().forEach(track => track.stop()); return }
       recordingStarted.current = Date.now()
-      instance.start(250); setRecording(true)
+      instance.start(250); setRecording(true); setBusy(false); setNotice('Recording… Tap Stop recording when the announcement is finished.')
       setTimeout(() => { if (instance.state === 'recording') instance.stop() }, 30000)
-    } catch (e) { setRecording(false); setError(e.message) }
+    } catch (e) { setRecording(false); setBusy(false); setNotice(''); setError(e.message) }
   }
   function previewResult(result) {
     previewSequence.current++
