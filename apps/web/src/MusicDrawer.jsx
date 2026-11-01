@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { Icon, Modal } from './ui'
-import { ensureAudioGain, resetAudioGain, scheduleAudioFade } from './audioFade'
+import { audioEnvelopeLevel, ensureAudioGain, resetAudioGain, setAudioGain } from './audioFade'
 
 const time = seconds => Number.isFinite(seconds) ? `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, '0')}` : ''
 const audioTypes = { mp3: 'audio/mpeg', m4a: 'audio/mp4', mp4: 'audio/mp4', aac: 'audio/aac', wav: 'audio/wav' }
@@ -71,11 +71,11 @@ function TimingClip({ label, icon, start, duration, scale, maxStart, onChange })
   const stop = event => { if (drag.current) event.currentTarget.releasePointerCapture?.(event.pointerId); drag.current = null }
   return <div className="walkup-timeline-row"><span className="walkup-timeline-label"><Icon name={icon} size={14} />{label}</span><div className="walkup-timeline-lane"><button type="button" className={`walkup-timeline-clip ${icon}`} style={{ left: `${start / scale * 100}%`, width: `${duration / scale * 100}%` }} role="slider" aria-label={`${label} starts at ${time(start)}`} aria-valuemin="0" aria-valuemax={maxStart} aria-valuenow={start} onPointerDown={event => { event.currentTarget.setPointerCapture(event.pointerId); drag.current = { x: event.clientX, width: event.currentTarget.parentElement.clientWidth, start } }} onPointerMove={move} onPointerUp={stop} onPointerCancel={stop} onKeyDown={event => { if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') { event.preventDefault(); onChange(Math.min(maxStart, Math.max(0, start + (event.key === 'ArrowRight' ? .5 : -.5)))) } }}><span>{time(start)}</span><strong>{time(duration)}</strong></button></div></div>
 }
-function BuildWalkup({ introDuration, musicDuration, introStart, musicStart, fadeIn, fadeOut, playing, busy, onIntroStart, onMusicStart, onFadeIn, onFadeOut, onPreview }) {
+function BuildWalkup({ introDuration, musicDuration, introStart, musicStart, fadeIn, fadeOut, overlapReduction, playing, busy, onIntroStart, onMusicStart, onFadeIn, onFadeOut, onOverlapReduction, onPreview }) {
   const scale = Math.max(.1, introDuration + musicDuration)
   const introMaxStart = musicDuration
   const musicMaxStart = introDuration
-  return <section className="build-walkup"><div className="build-walkup-heading"><span className="walkup-clip-icon"><Icon name="music" size={18} /></span><div><h2>Build Walk-up</h2><p>Drag either clip to control its timing and overlap.</p></div></div><div className="walkup-timeline" style={{ '--timeline-seconds': scale }}><div className="walkup-timeline-ruler"><span>0:00</span><span>{time(scale / 2)}</span><span>{time(scale)}</span></div><TimingClip label="Announcement" icon="microphone" start={Math.min(introStart, introMaxStart)} duration={introDuration} scale={scale} maxStart={introMaxStart} onChange={onIntroStart} /><TimingClip label="Music" icon="music" start={Math.min(musicStart, musicMaxStart)} duration={musicDuration} scale={scale} maxStart={musicMaxStart} onChange={onMusicStart} /></div><div className="walkup-timing-summary"><span>Total timeline</span><strong>{time(scale)}</strong></div><div className="walkup-fades"><div><span><strong>Fade in</strong><small>Ease the music in</small></span><button type="button" className={`walkup-switch${fadeIn ? ' on' : ''}`} role="switch" aria-checked={fadeIn} onClick={() => onFadeIn(!fadeIn)}><span /></button></div><div><span><strong>Fade out</strong><small>Ease the music out</small></span><button type="button" className={`walkup-switch${fadeOut ? ' on' : ''}`} role="switch" aria-checked={fadeOut} onClick={() => onFadeOut(!fadeOut)}><span /></button></div></div><button type="button" className="build-walkup-preview button-secondary" disabled={busy} onClick={onPreview}><Icon name={playing ? 'stop' : 'play'} size={16} />{playing ? 'Stop full preview' : 'Preview full walk-up'}</button></section>
+  return <section className="build-walkup"><div className="build-walkup-heading"><span className="walkup-clip-icon"><Icon name="music" size={18} /></span><div><h2>Build Walk-up</h2><p>Drag either clip to control its timing and overlap.</p></div></div><div className="walkup-timeline" style={{ '--timeline-seconds': scale }}><div className="walkup-timeline-ruler"><span>0:00</span><span>{time(scale / 2)}</span><span>{time(scale)}</span></div><TimingClip label="Announcement" icon="microphone" start={Math.min(introStart, introMaxStart)} duration={introDuration} scale={scale} maxStart={introMaxStart} onChange={onIntroStart} /><TimingClip label="Music" icon="music" start={Math.min(musicStart, musicMaxStart)} duration={musicDuration} scale={scale} maxStart={musicMaxStart} onChange={onMusicStart} /></div><div className="walkup-timing-summary"><span>Total timeline</span><strong>{time(scale)}</strong></div><div className="walkup-fades"><div><span><strong>Fade in</strong><small>Ease the music in</small></span><button type="button" className={`walkup-switch${fadeIn ? ' on' : ''}`} role="switch" aria-checked={fadeIn} onClick={() => onFadeIn(!fadeIn)}><span /></button></div><div><span><strong>Fade out</strong><small>Ease the music out</small></span><button type="button" className={`walkup-switch${fadeOut ? ' on' : ''}`} role="switch" aria-checked={fadeOut} onClick={() => onFadeOut(!fadeOut)}><span /></button></div></div><label className="walkup-ducking"><span><strong>Decrease music volume during overlap</strong><output>{Math.round(overlapReduction * 100)}%</output></span><input type="range" min="0" max="90" step="5" value={Math.round(overlapReduction * 100)} onChange={event => onOverlapReduction(Number(event.target.value) / 100)} /></label><button type="button" className="build-walkup-preview button-secondary" disabled={busy} onClick={onPreview}><Icon name={playing ? 'stop' : 'play'} size={16} />{playing ? 'Stop full preview' : 'Preview full walk-up'}</button></section>
 }
 export function MusicDrawer({ api, target, player, onClose, onAssigned }) {
   const [library, setLibrary] = useState(null)
@@ -110,6 +110,7 @@ export function MusicDrawer({ api, target, player, onClose, onAssigned }) {
   const [musicStart, setMusicStart] = useState(0)
   const [fadeIn, setFadeIn] = useState(true)
   const [fadeOut, setFadeOut] = useState(true)
+  const [overlapReduction, setOverlapReduction] = useState(.5)
   const active = useRef(true)
   const preview = useRef(null)
   const introPreview = useRef(null)
@@ -138,7 +139,7 @@ export function MusicDrawer({ api, target, player, onClose, onAssigned }) {
           const intro = data.tracks.find(item => item.id === nextIntroId)
           setIntroStart(Number(assignment.introStart) || 0)
           setMusicStart(Number.isFinite(assignment.musicStart) ? assignment.musicStart : Math.max(0, (Number(intro?.duration) || .9) - .9))
-          setFadeIn(assignment.fadeIn !== false); setFadeOut(assignment.fadeOut !== false)
+          setFadeIn(assignment.fadeIn !== false); setFadeOut(assignment.fadeOut !== false); setOverlapReduction(Number.isFinite(assignment.overlapReduction) ? assignment.overlapReduction : .5)
         }
         if (track) {
           const clip = clampClip(track, typeof assignment === 'object' ? assignment.start : 0, typeof assignment === 'object' ? assignment.duration : 15)
@@ -212,7 +213,7 @@ export function MusicDrawer({ api, target, player, onClose, onAssigned }) {
         onAssigned(entries.map(entry => {
           const item = data.tracks.find(track => track.id === assignmentId(entry))
           const intro = typeof entry === 'object' && entry.introId ? data.tracks.find(track => track.id === entry.introId) : null
-          return typeof entry === 'object' && (item || intro) ? { ...(item || { id: null, title: 'Announcement', artist: '', status: 'ready' }), clipStart: entry.start, clipDuration: entry.duration, intro, introStart: entry.introStart || 0, musicStart: entry.musicStart || 0, fadeIn: entry.fadeIn !== false, fadeOut: entry.fadeOut !== false } : item
+          return typeof entry === 'object' && (item || intro) ? { ...(item || { id: null, title: 'Announcement', artist: '', status: 'ready' }), clipStart: entry.start, clipDuration: entry.duration, intro, introStart: entry.introStart || 0, musicStart: entry.musicStart || 0, fadeIn: entry.fadeIn !== false, fadeOut: entry.fadeOut !== false, overlapReduction: Number.isFinite(entry.overlapReduction) ? entry.overlapReduction : .5 } : item
         }).filter(Boolean))
         setNotice(`${track.title} was deleted from Your music.`)
       }
@@ -346,7 +347,7 @@ export function MusicDrawer({ api, target, player, onClose, onAssigned }) {
         onAssigned(entries.map(entry => {
           const track = library.tracks.find(item => item.id === assignmentId(entry))
           const intro = typeof entry === 'object' && entry.introId ? library.tracks.find(item => item.id === entry.introId) : null
-          return typeof entry === 'object' && (track || intro) ? { ...(track || { id: null, title: 'Announcement', artist: '', status: 'ready' }), clipStart: entry.start, clipDuration: entry.duration, intro, introStart: entry.introStart || 0, musicStart: entry.musicStart || 0, fadeIn: entry.fadeIn !== false, fadeOut: entry.fadeOut !== false } : track
+          return typeof entry === 'object' && (track || intro) ? { ...(track || { id: null, title: 'Announcement', artist: '', status: 'ready' }), clipStart: entry.start, clipDuration: entry.duration, intro, introStart: entry.introStart || 0, musicStart: entry.musicStart || 0, fadeIn: entry.fadeIn !== false, fadeOut: entry.fadeOut !== false, overlapReduction: Number.isFinite(entry.overlapReduction) ? entry.overlapReduction : .5 } : track
         }).filter(Boolean))
         closeDrawer()
       }
@@ -387,7 +388,7 @@ export function MusicDrawer({ api, target, player, onClose, onAssigned }) {
       if (intro) setTimeout(() => { if (active.current && sequence === previewSequence.current) introElement.play().catch(() => {}) }, introStart * 1000)
       await new Promise(resolve => setTimeout(resolve, (musicOnly ? 0 : musicStart) * 1000))
       if (!active.current || sequence !== previewSequence.current) return
-      scheduleAudioFade(graph, clipDuration, fadeIn, fadeOut)
+      setAudioGain(graph, audioEnvelopeLevel(0, clipDuration, fadeIn, fadeOut))
       await element.play()
       setPlayingTrackId(track.id)
       clipTimer.current = setInterval(() => {
@@ -398,6 +399,9 @@ export function MusicDrawer({ api, target, player, onClose, onAssigned }) {
           setClipPlaying(false); setPlayingTrackId(null)
           return
         }
+        const timelineTime = (musicOnly ? 0 : musicStart) + elapsed
+        const overlapping = !musicOnly && announcerEnabled && timelineTime >= introStart && timelineTime < introStart + (Number(intro?.duration) || 0)
+        setAudioGain(graph, audioEnvelopeLevel(elapsed, clipDuration, fadeIn, fadeOut, overlapping, overlapReduction))
       }, 50)
     } catch (e) {
       if (active.current && sequence === previewSequence.current) { setError(e.message || 'The walk-up preview could not play.'); setClipPlaying(false) }
@@ -449,7 +453,7 @@ export function MusicDrawer({ api, target, player, onClose, onAssigned }) {
   const saveWalkup = () => {
     if (!announcerEnabled && !musicEnabled) return assign([])
     const entry = {
-      ...(musicEnabled ? { id: clipTrackId, start: clipStart, duration: clipDuration, musicStart: Math.min(musicStart, Number(introTrack?.duration) || 0), fadeIn, fadeOut } : {}),
+      ...(musicEnabled ? { id: clipTrackId, start: clipStart, duration: clipDuration, musicStart: Math.min(musicStart, Number(introTrack?.duration) || 0), fadeIn, fadeOut, overlapReduction } : {}),
       ...(announcerEnabled ? { introId: introTrackId, introStart: Math.min(introStart, clipDuration) } : {}),
     }
     return assign([entry])
@@ -489,7 +493,7 @@ export function MusicDrawer({ api, target, player, onClose, onAssigned }) {
           {musicEnabled && <WalkupClipEditor track={clipTrack} start={clipStart} duration={clipDuration} playing={clipPlaying} busy={busy} previewDisabled={!clipTrack} onStart={clip => { setClipStart(clip.start); setClipDuration(clip.duration) }} onDuration={clip => setClipDuration(clip.duration)} onPreview={() => previewWalkup(clipTrack, true)} />}
         </div>}
       </section>
-      {announcerEnabled && musicEnabled && introTrack && clipTrack && <BuildWalkup introDuration={Number(introTrack.duration) || 1} musicDuration={clipDuration} introStart={introStart} musicStart={musicStart} fadeIn={fadeIn} fadeOut={fadeOut} playing={clipPlaying} busy={busy} onIntroStart={setIntroStart} onMusicStart={setMusicStart} onFadeIn={setFadeIn} onFadeOut={setFadeOut} onPreview={() => previewWalkup(clipTrack)} />}
+      {announcerEnabled && musicEnabled && introTrack && clipTrack && <BuildWalkup introDuration={Number(introTrack.duration) || 1} musicDuration={clipDuration} introStart={introStart} musicStart={musicStart} fadeIn={fadeIn} fadeOut={fadeOut} overlapReduction={overlapReduction} playing={clipPlaying} busy={busy} onIntroStart={setIntroStart} onMusicStart={setMusicStart} onFadeIn={setFadeIn} onFadeOut={setFadeOut} onOverlapReduction={setOverlapReduction} onPreview={() => previewWalkup(clipTrack)} />}
       <button type="button" className="sheet-save button-primary" disabled={busy || !playerReady} onClick={saveWalkup}><Icon name="save" size={16} />{busy ? 'Saving…' : 'Save Walk-up'}</button>
       <button type="button" className="drawer-cancel button-secondary" disabled={busy} onClick={closeDrawer}>Cancel</button>
     </div>}

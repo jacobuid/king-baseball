@@ -33,3 +33,16 @@ export function resetAudioGain(graph) {
   graph.gain.gain.cancelScheduledValues(now)
   graph.gain.gain.setValueAtTime(1, now)
 }
+
+export function setAudioGain(graph, value) {
+  if (!graph) return
+  graph.gain.gain.setValueAtTime(Math.max(.0001, Math.min(1, value)), graph.context.currentTime)
+}
+
+export function audioEnvelopeLevel(elapsed, duration, fadeIn, fadeOut, overlapping = false, overlapReduction = 0) {
+  const length = Math.max(.1, Number(duration) || 0)
+  const fadeLength = Math.min(1.5, length / 3)
+  const remaining = length - elapsed
+  const fadeLevel = Math.max(0, Math.min(1, fadeIn ? elapsed / fadeLength : 1, fadeOut ? remaining / fadeLength : 1))
+  return fadeLevel * (overlapping ? 1 - Math.max(0, Math.min(.9, overlapReduction)) : 1)
+}

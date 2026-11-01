@@ -5,7 +5,7 @@ import { createTeamApi } from './teamApi'
 import { teamStorage } from './teamStorage'
 import { createTeamTheme } from './teamTheme'
 import { createMusicApi, mergeMusic } from './musicApi'
-import { ensureAudioGain, resetAudioGain, scheduleAudioFade } from './audioFade'
+import { audioEnvelopeLevel, ensureAudioGain, resetAudioGain, setAudioGain } from './audioFade'
 import './team-playlist.css'
 
 export function TeamView({ userId, onEdit }) {
@@ -90,7 +90,7 @@ export function TeamView({ userId, onEdit }) {
         if (introUrl) setTimeout(() => { if (!disposed) introElement.play().catch(() => {}) }, Math.max(0, Number(activeSong.introStart) || 0) * 1000)
         await new Promise(resolve => setTimeout(resolve, Math.max(0, Number(activeSong.musicStart) || 0) * 1000))
         if (disposed) return
-        scheduleAudioFade(graph, duration, activeSong.fadeIn !== false, activeSong.fadeOut !== false)
+        setAudioGain(graph, audioEnvelopeLevel(0, duration, activeSong.fadeIn !== false, activeSong.fadeOut !== false))
         await element.play()
         clipTimer.current = setInterval(() => {
           const elapsed = element.currentTime - start
@@ -100,6 +100,10 @@ export function TeamView({ userId, onEdit }) {
             setPlaying(false); setActiveId(null)
             return
           }
+          const timelineTime = (Number(activeSong.musicStart) || 0) + elapsed
+          const introStart = Number(activeSong.introStart) || 0
+          const overlapping = !!activeSong.intro && timelineTime >= introStart && timelineTime < introStart + (Number(activeSong.intro.duration) || 0)
+          setAudioGain(graph, audioEnvelopeLevel(elapsed, duration, activeSong.fadeIn !== false, activeSong.fadeOut !== false, overlapping, Number(activeSong.overlapReduction) || 0))
         }, 50)
       } catch (error) { if (!disposed) {
         if (error.name === 'NotAllowedError') setError('Tap the play button again to start playback.')
