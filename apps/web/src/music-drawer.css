@@ -133,6 +133,16 @@
   box-shadow: 0 8px 24px #041c3625;
 }
 
+.music-results .music-result.previewing {
+  border-radius: 12px 12px 0 0;
+}
+
+.music-results .music-search-preview {
+  margin: -8px 0 8px;
+  border-top: 0;
+  border-radius: 0 0 14px 14px;
+}
+
 .music-search-preview-heading {
   display: flex;
   align-items: center;
