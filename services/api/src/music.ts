@@ -6,7 +6,7 @@ export interface MusicEnv {
   MUSIC_SERVICE_URL: string; MUSIC_SERVICE_TOKEN: string
 }
 type Track = { id: string; owner_user_id: string; video_id: string; title: string; artist: string; status: string; object_key: string; content_type: string; duration: number | null; error: string | null; kind: 'song' | 'intro' }
-type PlayerAssignment = { id?: string; start?: number; duration?: number; introId?: string }
+type PlayerAssignment = { id?: string; start?: number; duration?: number; introId?: string; introStart?: number; musicStart?: number; fadeIn?: boolean; fadeOut?: boolean }
 const json = (data: unknown, status = 200) => Response.json(data, { status, headers: { 'Cache-Control': 'no-store' } })
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const publicTrack = (row: Track) => ({ id: row.id, videoId: row.video_id, title: row.title, artist: row.artist, status: row.status, duration: row.duration, error: row.error, kind: row.kind || 'song' })
@@ -134,8 +134,8 @@ export async function handleMusicRequest(request: Request, env: MusicEnv, userId
     const teamEntries = body.target === 'team' ? body.tracks : []
     const playerEntries = body.target === 'team' ? [] : body.tracks
     if (teamEntries.some(id => typeof id !== 'string' || !uuid.test(id)) || new Set(teamEntries).size !== teamEntries.length) return json({ error: 'Invalid track list' }, 400)
-    if (playerEntries.some(entry => { const value = entry as PlayerAssignment; return typeof entry !== 'object' || entry === null || (!value.id && !value.introId) || (!!value.id && (!uuid.test(value.id) || !Number.isFinite(value.start) || !Number.isFinite(value.duration))) || (!!value.introId && !uuid.test(value.introId)) })) return json({ error: 'Choose a valid walk-up' }, 400)
-    const normalized: (string | PlayerAssignment)[] = body.target === 'team' ? teamEntries as string[] : playerEntries.map(entry => { const value = entry as PlayerAssignment; return { ...(value.id ? { id: value.id, start: Math.round(value.start! * 10) / 10, duration: Math.round(value.duration! * 10) / 10 } : {}), ...(value.introId ? { introId: value.introId } : {}) } })
+    if (playerEntries.some(entry => { const value = entry as PlayerAssignment; return typeof entry !== 'object' || entry === null || (!value.id && !value.introId) || (!!value.id && (!uuid.test(value.id) || !Number.isFinite(value.start) || !Number.isFinite(value.duration))) || (!!value.introId && !uuid.test(value.introId)) || (value.introStart !== undefined && (!Number.isFinite(value.introStart) || value.introStart < 0 || value.introStart > 15)) || (value.musicStart !== undefined && (!Number.isFinite(value.musicStart) || value.musicStart < 0 || value.musicStart > 15)) || (value.fadeIn !== undefined && typeof value.fadeIn !== 'boolean') || (value.fadeOut !== undefined && typeof value.fadeOut !== 'boolean') })) return json({ error: 'Choose a valid walk-up' }, 400)
+    const normalized: (string | PlayerAssignment)[] = body.target === 'team' ? teamEntries as string[] : playerEntries.map(entry => { const value = entry as PlayerAssignment; return { ...(value.id ? { id: value.id, start: Math.round(value.start! * 10) / 10, duration: Math.round(value.duration! * 10) / 10, ...(value.musicStart !== undefined ? { musicStart: Math.round(value.musicStart * 10) / 10 } : {}), ...(value.fadeIn !== undefined ? { fadeIn: value.fadeIn } : {}), ...(value.fadeOut !== undefined ? { fadeOut: value.fadeOut } : {}) } : {}), ...(value.introId ? { introId: value.introId, ...(value.introStart !== undefined ? { introStart: Math.round(value.introStart * 10) / 10 } : {}) } : {}) } })
     for (const entry of normalized) {
       const id = typeof entry === 'string' ? entry : entry.id
       const owned = id ? await env.DB.prepare("SELECT id,duration,kind FROM music_tracks WHERE id=? AND owner_user_id=? AND status='ready'").bind(id, userId).first<{ id: string; duration: number | null; kind: string }>() : null

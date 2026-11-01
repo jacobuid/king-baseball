@@ -57,16 +57,21 @@ export function TeamView({ userId, onEdit }) {
       try {
         const songUrl = activeSong.id && activeSong.status === 'ready' ? (await requestMusic('/' + activeSong.id + '/play', {})).url : activeSong.file instanceof Blob ? (objectUrl = URL.createObjectURL(activeSong.file)) : null
         if (disposed || (!songUrl && !activeSong.intro)) return
-        if (!activeSong.playbackId.startsWith('team-') && activeSong.intro?.status === 'ready') {
-          const introUrl = (await requestMusic('/' + activeSong.intro.id + '/play', {})).url
+        const playerWalkup = !activeSong.playbackId.startsWith('team-')
+        let introUrl = null
+        if (playerWalkup && activeSong.intro?.status === 'ready') {
+          introUrl = (await requestMusic('/' + activeSong.intro.id + '/play', {})).url
           if (disposed) return
           introElement.src = introUrl
-          await introElement.play()
-          const introDuration = Number(activeSong.intro.duration) || 0
-          await new Promise(resolve => setTimeout(resolve, Math.max(0, introDuration - (songUrl ? .9 : 0)) * 1000))
-          if (disposed) return
         }
-        if (!songUrl) { setPlaying(false); setActiveId(null); return }
+        if (!songUrl) {
+          await new Promise(resolve => setTimeout(resolve, Math.max(0, Number(activeSong.introStart) || 0) * 1000))
+          if (disposed || !introUrl) return
+          await introElement.play()
+          await new Promise(resolve => setTimeout(resolve, (Number(activeSong.intro?.duration) || 0) * 1000))
+          if (!disposed) { setPlaying(false); setActiveId(null) }
+          return
+        }
         element.src = songUrl
         if (activeSong.playbackId.startsWith('team-')) { await element.play(); return }
         if (element.readyState < 1) await new Promise((resolve, reject) => {
@@ -79,7 +84,10 @@ export function TeamView({ userId, onEdit }) {
         const duration = Math.max(3, Number(activeSong.clipDuration) || Math.min(15, activeSong.duration || 15))
         const fade = Math.min(.8, duration / 3)
         element.currentTime = start
-        element.volume = 0
+        element.volume = activeSong.fadeIn === false ? 1 : 0
+        if (introUrl) setTimeout(() => { if (!disposed) introElement.play().catch(() => {}) }, Math.max(0, Number(activeSong.introStart) || 0) * 1000)
+        await new Promise(resolve => setTimeout(resolve, Math.max(0, Number(activeSong.musicStart) || 0) * 1000))
+        if (disposed) return
         await element.play()
         clipTimer.current = setInterval(() => {
           const elapsed = element.currentTime - start
@@ -89,7 +97,7 @@ export function TeamView({ userId, onEdit }) {
             setPlaying(false); setActiveId(null)
             return
           }
-          element.volume = Math.max(0, Math.min(1, elapsed / fade, remaining / fade))
+          element.volume = Math.max(0, Math.min(1, activeSong.fadeIn === false ? 1 : elapsed / fade, activeSong.fadeOut === false ? 1 : remaining / fade))
         }, 50)
       } catch (error) { if (!disposed) {
         if (error.name === 'NotAllowedError') setError('Tap the play button again to start playback.')

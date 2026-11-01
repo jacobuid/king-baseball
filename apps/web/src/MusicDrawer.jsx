@@ -56,9 +56,25 @@ function WalkupClipEditor({ track, start, duration, playing, busy, previewDisabl
     <div className="walkup-clip-heading"><span className="walkup-clip-icon"><Icon name="music" size={18} /></span><span><h2 id="walkup-clip-title">Music clip</h2><small>{track.title}</small></span></div>
     <label className="walkup-range"><span><strong>Song starts at</strong><output>{time(start)}</output></span><input type="range" min="0" max={maxStart} step="0.5" value={start} onChange={event => onStart(clampClip(track, event.target.value, duration))} /></label>
     <label className="walkup-range"><span><strong>Clip length</strong><output>{Math.round(duration)} sec</output></span><input type="range" min="3" max={maxDuration} step="1" value={duration} onChange={event => onDuration(clampClip(track, start, event.target.value))} /></label>
-    <p className="walkup-clip-summary">Plays {time(start)}–{time(start + duration)} with a smooth fade in and fade out.</p>
+    <p className="walkup-clip-summary">Uses {time(start)}–{time(start + duration)} from the selected song.</p>
     <button type="button" className="walkup-preview button-secondary" disabled={busy || previewDisabled} onClick={onPreview}><Icon name={playing ? 'stop' : 'play'} size={16} />{playing ? 'Stop preview' : 'Preview walk-up'}</button>
   </section>
+}
+function TimingClip({ label, icon, start, duration, scale, maxStart, onChange }) {
+  const drag = useRef(null)
+  const move = event => {
+    if (!drag.current) return
+    const delta = (event.clientX - drag.current.x) / drag.current.width * scale
+    onChange(Math.round(Math.min(maxStart, Math.max(0, drag.current.start + delta)) * 10) / 10)
+  }
+  const stop = event => { if (drag.current) event.currentTarget.releasePointerCapture?.(event.pointerId); drag.current = null }
+  return <div className="walkup-timeline-row"><span className="walkup-timeline-label"><Icon name={icon} size={14} />{label}</span><div className="walkup-timeline-lane"><button type="button" className={`walkup-timeline-clip ${icon}`} style={{ left: `${start / scale * 100}%`, width: `${Math.max(8, duration / scale * 100)}%` }} role="slider" aria-label={`${label} starts at ${time(start)}`} aria-valuemin="0" aria-valuemax={maxStart} aria-valuenow={start} onPointerDown={event => { event.currentTarget.setPointerCapture(event.pointerId); drag.current = { x: event.clientX, width: event.currentTarget.parentElement.clientWidth, start } }} onPointerMove={move} onPointerUp={stop} onPointerCancel={stop} onKeyDown={event => { if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') { event.preventDefault(); onChange(Math.min(maxStart, Math.max(0, start + (event.key === 'ArrowRight' ? .5 : -.5)))) } }}><span>{time(start)}</span><strong>{time(duration)}</strong></button></div></div>
+}
+function BuildWalkup({ introDuration, musicDuration, introStart, musicStart, fadeIn, fadeOut, onIntroStart, onMusicStart, onFadeIn, onFadeOut }) {
+  const maxStart = 15
+  const scale = Math.max(20, introDuration + maxStart, musicDuration + maxStart)
+  const total = Math.max(introStart + introDuration, musicStart + musicDuration)
+  return <section className="build-walkup"><div className="build-walkup-heading"><span className="walkup-clip-icon"><Icon name="music" size={18} /></span><div><h2>Build Walk-up</h2><p>Drag either clip to control its timing and overlap.</p></div></div><div className="walkup-timeline" style={{ '--timeline-seconds': scale }}><div className="walkup-timeline-ruler"><span>0:00</span><span>{time(scale / 2)}</span><span>{time(scale)}</span></div><TimingClip label="Announcer" icon="microphone" start={introStart} duration={introDuration} scale={scale} maxStart={maxStart} onChange={onIntroStart} /><TimingClip label="Music" icon="music" start={musicStart} duration={musicDuration} scale={scale} maxStart={maxStart} onChange={onMusicStart} /></div><div className="walkup-timing-summary"><span>Total walk-up</span><strong>{time(total)}</strong></div><div className="walkup-fades"><div><span><strong>Fade in</strong><small>Ease the music in</small></span><button type="button" className={`walkup-switch${fadeIn ? ' on' : ''}`} role="switch" aria-checked={fadeIn} onClick={() => onFadeIn(!fadeIn)}><span /></button></div><div><span><strong>Fade out</strong><small>Ease the music out</small></span><button type="button" className={`walkup-switch${fadeOut ? ' on' : ''}`} role="switch" aria-checked={fadeOut} onClick={() => onFadeOut(!fadeOut)}><span /></button></div></div></section>
 }
 export function MusicDrawer({ api, target, player, onClose, onAssigned }) {
   const [library, setLibrary] = useState(null)
@@ -89,6 +105,10 @@ export function MusicDrawer({ api, target, player, onClose, onAssigned }) {
   const [musicOpen, setMusicOpen] = useState(false)
   const [getMusicOpen, setGetMusicOpen] = useState(false)
   const [introPlaying, setIntroPlaying] = useState(false)
+  const [introStart, setIntroStart] = useState(0)
+  const [musicStart, setMusicStart] = useState(0)
+  const [fadeIn, setFadeIn] = useState(true)
+  const [fadeOut, setFadeOut] = useState(true)
   const active = useRef(true)
   const preview = useRef(null)
   const introPreview = useRef(null)
@@ -112,6 +132,12 @@ export function MusicDrawer({ api, target, player, onClose, onAssigned }) {
         const track = data.tracks.find(item => item.id === id)
         const nextIntroId = typeof assignment === 'object' ? assignment.introId || null : null
         setIntroTrackId(nextIntroId); setAnnouncerEnabled(!!nextIntroId); setMusicEnabled(!!track); setAnnouncerOpen(!!nextIntroId); setMusicOpen(!!track)
+        if (typeof assignment === 'object') {
+          const intro = data.tracks.find(item => item.id === nextIntroId)
+          setIntroStart(Number(assignment.introStart) || 0)
+          setMusicStart(Number.isFinite(assignment.musicStart) ? assignment.musicStart : Math.max(0, (Number(intro?.duration) || .9) - .9))
+          setFadeIn(assignment.fadeIn !== false); setFadeOut(assignment.fadeOut !== false)
+        }
         if (track) {
           const clip = clampClip(track, typeof assignment === 'object' ? assignment.start : 0, typeof assignment === 'object' ? assignment.duration : 15)
           setClipTrackId(id); setClipStart(clip.start); setClipDuration(clip.duration)
@@ -184,7 +210,7 @@ export function MusicDrawer({ api, target, player, onClose, onAssigned }) {
         onAssigned(entries.map(entry => {
           const item = data.tracks.find(track => track.id === assignmentId(entry))
           const intro = typeof entry === 'object' && entry.introId ? data.tracks.find(track => track.id === entry.introId) : null
-          return typeof entry === 'object' && (item || intro) ? { ...(item || { id: null, title: 'Announcer intro', artist: '', status: 'ready' }), clipStart: entry.start, clipDuration: entry.duration, intro } : item
+          return typeof entry === 'object' && (item || intro) ? { ...(item || { id: null, title: 'Announcer intro', artist: '', status: 'ready' }), clipStart: entry.start, clipDuration: entry.duration, intro, introStart: entry.introStart || 0, musicStart: entry.musicStart || 0, fadeIn: entry.fadeIn !== false, fadeOut: entry.fadeOut !== false } : item
         }).filter(Boolean))
         setNotice(`${track.title} was deleted from Your music.`)
       }
@@ -318,7 +344,7 @@ export function MusicDrawer({ api, target, player, onClose, onAssigned }) {
         onAssigned(entries.map(entry => {
           const track = library.tracks.find(item => item.id === assignmentId(entry))
           const intro = typeof entry === 'object' && entry.introId ? library.tracks.find(item => item.id === entry.introId) : null
-          return typeof entry === 'object' && (track || intro) ? { ...(track || { id: null, title: 'Announcer intro', artist: '', status: 'ready' }), clipStart: entry.start, clipDuration: entry.duration, intro } : track
+          return typeof entry === 'object' && (track || intro) ? { ...(track || { id: null, title: 'Announcer intro', artist: '', status: 'ready' }), clipStart: entry.start, clipDuration: entry.duration, intro, introStart: entry.introStart || 0, musicStart: entry.musicStart || 0, fadeIn: entry.fadeIn !== false, fadeOut: entry.fadeOut !== false } : track
         }).filter(Boolean))
         closeDrawer()
       }
@@ -344,33 +370,19 @@ export function MusicDrawer({ api, target, player, onClose, onAssigned }) {
       if (announcerEnabled && !intro) throw new Error('Record or upload the announcer intro first.')
       const [introPlayback, songPlayback] = await Promise.all([intro ? api(`/${intro.id}/play`, {}) : null, api(`/${track.id}/play`, {})])
       if (!active.current || sequence !== previewSequence.current) return
-      if (intro) {
-        introElement.src = introPlayback.url
-        introElement.load()
-        if (introElement.readyState < 1) await new Promise((resolve, reject) => {
-          const ready = () => { cleanup(); resolve() }
-          const failed = () => { cleanup(); reject(new Error('The clip could not be loaded.')) }
-          const cleanup = () => { introElement.removeEventListener('loadedmetadata', ready); introElement.removeEventListener('error', failed) }
-          introElement.addEventListener('loadedmetadata', ready); introElement.addEventListener('error', failed)
-        })
-        if (!active.current || sequence !== previewSequence.current) return
-        introElement.volume = 1
-        await introElement.play()
-        const introDuration = Number.isFinite(introElement.duration) ? introElement.duration : Number(intro.duration) || 0
-        await new Promise(resolve => setTimeout(resolve, Math.max(0, introDuration - .9) * 1000))
-        if (!active.current || sequence !== previewSequence.current) return
-      }
       loadedPreviewId.current = track.id
       element.src = songPlayback.url
       element.load()
-      if (element.readyState < 1) await new Promise((resolve, reject) => {
-        const ready = () => { cleanup(); resolve() }
-        const failed = () => { cleanup(); reject(new Error('The song clip could not be loaded.')) }
-        const cleanup = () => { element.removeEventListener('loadedmetadata', ready); element.removeEventListener('error', failed) }
-        element.addEventListener('loadedmetadata', ready); element.addEventListener('error', failed)
-      })
-      element.currentTime = clipStart
-      element.volume = 0
+      if (intro) { introElement.src = introPlayback.url; introElement.load() }
+      await Promise.all([
+        intro ? new Promise((resolve, reject) => { if (introElement.readyState >= 1) return resolve(); const ready = () => { cleanup(); resolve() }; const failed = () => { cleanup(); reject(new Error('The announcement could not be loaded.')) }; const cleanup = () => { introElement.removeEventListener('loadedmetadata', ready); introElement.removeEventListener('error', failed) }; introElement.addEventListener('loadedmetadata', ready); introElement.addEventListener('error', failed) }) : null,
+        new Promise((resolve, reject) => { if (element.readyState >= 1) return resolve(); const ready = () => { cleanup(); resolve() }; const failed = () => { cleanup(); reject(new Error('The song clip could not be loaded.')) }; const cleanup = () => { element.removeEventListener('loadedmetadata', ready); element.removeEventListener('error', failed) }; element.addEventListener('loadedmetadata', ready); element.addEventListener('error', failed) }),
+      ])
+      if (!active.current || sequence !== previewSequence.current) return
+      element.currentTime = clipStart; element.volume = fadeIn ? 0 : 1
+      if (intro) setTimeout(() => { if (active.current && sequence === previewSequence.current) introElement.play().catch(() => {}) }, introStart * 1000)
+      await new Promise(resolve => setTimeout(resolve, musicStart * 1000))
+      if (!active.current || sequence !== previewSequence.current) return
       await element.play()
       setPlayingTrackId(track.id)
       const fade = Math.min(.8, clipDuration / 3)
@@ -382,7 +394,7 @@ export function MusicDrawer({ api, target, player, onClose, onAssigned }) {
           setClipPlaying(false); setPlayingTrackId(null)
           return
         }
-        element.volume = Math.max(0, Math.min(1, elapsed / fade, remaining / fade))
+        element.volume = Math.max(0, Math.min(1, fadeIn ? elapsed / fade : 1, fadeOut ? remaining / fade : 1))
       }, 50)
     } catch (e) {
       if (active.current && sequence === previewSequence.current) { setError(e.message || 'The walk-up preview could not play.'); setClipPlaying(false) }
@@ -434,8 +446,8 @@ export function MusicDrawer({ api, target, player, onClose, onAssigned }) {
   const saveWalkup = () => {
     if (!announcerEnabled && !musicEnabled) return assign([])
     const entry = {
-      ...(musicEnabled ? { id: clipTrackId, start: clipStart, duration: clipDuration } : {}),
-      ...(announcerEnabled ? { introId: introTrackId } : {}),
+      ...(musicEnabled ? { id: clipTrackId, start: clipStart, duration: clipDuration, musicStart, fadeIn, fadeOut } : {}),
+      ...(announcerEnabled ? { introId: introTrackId, introStart } : {}),
     }
     return assign([entry])
   }
@@ -453,6 +465,7 @@ export function MusicDrawer({ api, target, player, onClose, onAssigned }) {
       </section>
       <section className={`walkup-section${musicOpen ? ' open' : ''}`}>
         <SectionToggle label="Music" checked={musicEnabled} open={musicOpen} onToggle={toggleMusic} onOpen={() => setMusicOpen(value => !value)} />
+        {announcerEnabled && musicEnabled && introTrack && clipTrack && <BuildWalkup introDuration={Number(introTrack.duration) || 1} musicDuration={clipDuration} introStart={introStart} musicStart={musicStart} fadeIn={fadeIn} fadeOut={fadeOut} onIntroStart={setIntroStart} onMusicStart={setMusicStart} onFadeIn={setFadeIn} onFadeOut={setFadeOut} />}
         {musicOpen && <div className="walkup-section-body">
           <div className="walkup-subhead"><h2>Get Music</h2><button type="button" className="walkup-add-music" aria-label={`${getMusicOpen ? 'Hide' : 'Show'} music search and upload`} aria-expanded={getMusicOpen} onClick={() => setGetMusicOpen(value => !value)}><Icon name={getMusicOpen ? 'close' : 'plus'} size={18} /></button></div>
           {getMusicOpen && <div className="walkup-get-music">
