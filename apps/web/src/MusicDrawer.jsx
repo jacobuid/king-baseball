@@ -11,6 +11,7 @@ export function MusicDrawer({ api, target, player, onClose, onAssigned }) {
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const [selected, setSelected] = useState([])
+  const [searchPreview, setSearchPreview] = useState(null)
   const [pending, setPending] = useState(null)
   const [retry, setRetry] = useState(0)
   const [pollTick, setPollTick] = useState(0)
@@ -64,6 +65,11 @@ export function MusicDrawer({ api, target, player, onClose, onAssigned }) {
     } catch (e) { if (active.current) setError(e.message) }
     finally { if (active.current) setBusy(false) }
   }
+  function previewResult(result) {
+    previewSequence.current++
+    preview.current?.pause()
+    setSearchPreview(current => current?.videoId === result.videoId ? null : result)
+  }
   async function assign(ids) {
     setBusy(true); setError('')
     try {
@@ -87,12 +93,13 @@ export function MusicDrawer({ api, target, player, onClose, onAssigned }) {
     {notice && <p role="status">{notice}</p>}
     {!library ? <p role="status">Loading your music library…</p> : <>
       {!library.configured && <p role="status">Music imports will be available once the Google music service is connected.</p>}
-      <label htmlFor="music-search">SEARCH MUSIC</label><input id="music-search" type="search" placeholder="Song or artist" maxLength={100} value={query} disabled={!library.configured} onChange={e => setQuery(e.target.value)} />
+      <label htmlFor="music-search">SEARCH MUSIC</label><input id="music-search" type="search" placeholder="Song or artist" maxLength={100} value={query} disabled={!library.configured} onChange={e => { setQuery(e.target.value); setSearchPreview(null) }} />
       {searching && <p role="status">Searching…</p>}
       {!searching && query.trim().length >= 3 && library.configured && results.length === 0 && <p>No results. Try another song or artist.</p>}
       <div className="music-results">{results.map(result => {
         const track = library.tracks.find(t => t.videoId === result.videoId)
-        return <article className="music-result" key={result.videoId}><img src={result.thumbnail} alt="" loading="lazy" /><div><strong>{result.title} {result.isExplicit === true && <span className="music-explicit" aria-label="Explicit content" title="Explicit content">E</span>}</strong><small>{result.artist} {time(result.duration)}</small>{result.album && <small>{result.album}</small>}</div><button type="button" className="button-secondary" disabled={busy || !!track && track.status !== 'failed'} onClick={() => importSong(result.videoId)}>{track?.status === 'ready' ? 'In library' : track && track.status !== 'failed' ? 'Importing…' : track ? 'Retry' : 'Import'}</button></article>
+        const previewing = searchPreview?.videoId === result.videoId
+        return <article className={`music-result${previewing ? ' previewing' : ''}`} key={result.videoId} tabIndex="0" aria-label={`${previewing ? 'Stop previewing' : 'Preview'} ${result.title}`} onClick={() => previewResult(result)} onKeyDown={event => { if ((event.key === 'Enter' || event.key === ' ') && event.target === event.currentTarget) { event.preventDefault(); previewResult(result) } }}><img src={result.thumbnail} alt="" loading="lazy" /><div><strong>{result.title} {result.isExplicit === true && <span className="music-explicit" aria-label="Explicit content" title="Explicit content">E</span>}</strong><small>{result.artist} {time(result.duration)}</small>{result.album && <small>{result.album}</small>}</div><button type="button" className="button-secondary" disabled={busy || !!track && track.status !== 'failed'} onClick={event => { event.stopPropagation(); importSong(result.videoId) }}>{track?.status === 'ready' ? 'In library' : track && track.status !== 'failed' ? 'Importing…' : track ? 'Retry' : 'Import'}</button></article>
       })}</div>
       <h3>Your music</h3>
       {!library.tracks.length && <p>Search above to import your first song.</p>}

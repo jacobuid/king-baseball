@@ -40,6 +40,78 @@
   opacity: .55;
 }
 
+.music-result {
+  cursor: pointer;
+  border-radius: 12px;
+  padding-inline: 8px;
+  transition: background-color 160ms ease, box-shadow 160ms ease;
+}
+
+.music-result:hover,
+.music-result:focus-visible,
+.music-result.previewing {
+  background: #edf5ff;
+  box-shadow: inset 0 0 0 1px #c7ddf6;
+}
+
+.music-result:focus-visible {
+  outline: 3px solid #327bd0;
+  outline-offset: 2px;
+}
+
+.music-search-preview {
+  margin-top: 14px;
+  overflow: hidden;
+  border: 1px solid #c7ddf6;
+  border-radius: 14px;
+  background: var(--theme-blue-dark);
+  box-shadow: 0 8px 24px #041c3625;
+}
+
+.music-search-preview-heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  color: #fff;
+}
+
+.music-search-preview-heading > span {
+  flex: 1;
+  min-width: 0;
+}
+
+.music-search-preview-heading strong,
+.music-search-preview-heading small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.music-search-preview-heading strong {
+  font-size: 13px;
+}
+
+.music-search-preview-heading small {
+  margin-top: 3px;
+  color: #bcd0e3;
+  font-size: 11px;
+}
+
+.music-search-preview-heading .close {
+  width: 32px;
+  height: 32px;
+}
+
+.music-search-preview iframe {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border: 0;
+  background: #000;
+}
+
 .sheet.music-drawer::backdrop {
   animation: music-backdrop-enter 300ms ease-out both;
 }
