@@ -30,6 +30,7 @@ test('music drawer renders the upload control directly below search', () => {
   assert.match(source, /type="file"[^>]+onChange=\{uploadSong\}/)
   assert.match(source, /youtube\.com\/embed\/.*enablejsapi=1/)
   assert.match(source, /onLoad=\{event => playSearchPreview\(event\.currentTarget\)\}/)
+  assert.match(source, /title=\{confirmation\.type === 'delete' \? 'Delete this song\?' : 'Import this song\?'\}/)
 })
 
 test('library, assignments, and playback are isolated by account', async () => {
@@ -106,6 +107,29 @@ test('uploaded audio joins the same private library and keeps its playback type'
     assert.equal((await completed.json()).track.status, 'ready')
     assert.equal(sqlite.prepare('SELECT status FROM music_tracks WHERE id=?').get(created.track.id).status, 'ready')
     assert.equal((await handleMusicRequest(request('/api/music/upload', { title: 'Bad', contentType: 'text/plain', size: 10, duration: 10 }), env, 'alice')).status, 400)
+  } finally { globalThis.fetch = original; sqlite.close() }
+})
+
+test('deleting owned music removes B2 audio and clears every assignment', async () => {
+  const { env, sqlite, insert } = setup()
+  const original = globalThis.fetch
+  let deleted = false
+  try {
+    insert(id, 'alice')
+    sqlite.prepare('INSERT INTO music_assignments(owner_user_id,target,tracks_json) VALUES(?,?,?)').run('alice', player, JSON.stringify([id]))
+    sqlite.prepare('INSERT INTO music_assignments(owner_user_id,target,tracks_json) VALUES(?,?,?)').run('alice', 'team', JSON.stringify([id, other]))
+    assert.equal((await handleMusicRequest(request(`/api/music/${id}`, {}, 'DELETE'), env, 'bob')).status, 404)
+    globalThis.fetch = async incoming => {
+      const outgoing = incoming instanceof Request ? incoming : new Request(incoming)
+      assert.equal(outgoing.method, 'DELETE')
+      deleted = true
+      return new Response(null, { status: 204 })
+    }
+    assert.equal((await handleMusicRequest(request(`/api/music/${id}`, {}, 'DELETE'), env, 'alice')).status, 200)
+    assert.equal(deleted, true)
+    assert.equal(sqlite.prepare('SELECT id FROM music_tracks WHERE id=?').get(id), undefined)
+    assert.deepEqual(JSON.parse(sqlite.prepare('SELECT tracks_json FROM music_assignments WHERE owner_user_id=? AND target=?').get('alice', player).tracks_json), [])
+    assert.deepEqual(JSON.parse(sqlite.prepare('SELECT tracks_json FROM music_assignments WHERE owner_user_id=? AND target=?').get('alice', 'team').tracks_json), [other])
   } finally { globalThis.fetch = original; sqlite.close() }
 })
 

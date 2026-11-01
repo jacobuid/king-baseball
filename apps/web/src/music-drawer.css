@@ -124,6 +124,64 @@
   border-radius: 50%;
 }
 
+.music-delete-button {
+  display: grid;
+  place-items: center;
+  flex: 0 0 36px;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 1px solid #f0c5c5;
+  border-radius: 50%;
+  background: #fff1f1;
+  color: #c43d3d;
+}
+
+.music-delete-button:hover:not(:disabled) {
+  background: #ffe4e4;
+  border-color: #df9b9b;
+}
+
+.sheet.music-confirm-dialog {
+  inset: 0;
+  width: min(calc(100% - 32px), 390px);
+  height: fit-content;
+  margin: auto;
+  padding: 22px;
+  border-radius: 20px;
+  overflow: visible;
+}
+
+.music-confirm-dialog .icon-trash {
+  color: #c43d3d;
+}
+
+.music-confirm-dialog p {
+  margin: 16px 0 22px;
+}
+
+.music-confirm-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.music-confirm-actions button {
+  min-height: 46px;
+  border-radius: 11px;
+  font-weight: 800;
+}
+
+.music-confirm-delete {
+  border: 0;
+  background: #c43d3d;
+  color: #fff;
+}
+
+.music-confirm-delete:hover:not(:disabled) {
+  background: #a92f2f;
+}
+
 .music-search-preview {
   margin-top: 14px;
   overflow: hidden;

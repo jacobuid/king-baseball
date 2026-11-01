@@ -136,6 +136,23 @@ export async function handleMusicRequest(request: Request, env: MusicEnv, userId
     await env.DB.prepare('INSERT INTO music_assignments(owner_user_id,target,tracks_json) VALUES(?,?,?) ON CONFLICT(owner_user_id,target) DO UPDATE SET tracks_json=excluded.tracks_json').bind(userId, body.target, JSON.stringify(body.tracks)).run()
     return json({ ok: true })
   }
+  const deleteTrack = path.match(/^\/api\/music\/([a-f0-9-]+)$/i)
+  if (deleteTrack && request.method === 'DELETE') {
+    const track = await env.DB.prepare("SELECT * FROM music_tracks WHERE id=? AND owner_user_id=? AND status IN ('ready','failed')").bind(deleteTrack[1], userId).first<Track>()
+    if (!track) return json({ error: 'Song not found or still importing' }, 404)
+    try {
+      const removed = await signer(env).fetch(objectUrl(env, track.object_key), { method: 'DELETE' })
+      if (!removed.ok && removed.status !== 404) return json({ error: 'Could not delete the stored audio. Please try again.' }, 502)
+    } catch { return json({ error: 'Could not delete the stored audio. Please try again.' }, 502) }
+    await env.DB.prepare('DELETE FROM music_tracks WHERE id=? AND owner_user_id=?').bind(track.id, userId).run()
+    const assignments = await env.DB.prepare('SELECT target,tracks_json FROM music_assignments WHERE owner_user_id=?').bind(userId).all<{ target: string; tracks_json: string }>()
+    for (const assignment of assignments.results) {
+      const tracks = JSON.parse(assignment.tracks_json) as unknown[]
+      const filtered = tracks.filter(id => id !== track.id)
+      if (filtered.length !== tracks.length) await env.DB.prepare('UPDATE music_assignments SET tracks_json=? WHERE owner_user_id=? AND target=?').bind(JSON.stringify(filtered), userId, assignment.target).run()
+    }
+    return json({ ok: true })
+  }
   const play = path.match(/^\/api\/music\/([a-f0-9-]+)\/play$/i)
   if (play && request.method === 'POST') {
     const track = await env.DB.prepare("SELECT * FROM music_tracks WHERE id=? AND owner_user_id=? AND status='ready'").bind(play[1], userId).first<Track>()
