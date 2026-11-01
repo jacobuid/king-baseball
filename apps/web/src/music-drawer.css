@@ -59,6 +59,11 @@
   min-width: 0;
 }
 
+.music-upload > svg {
+  flex: none;
+  align-self: center;
+}
+
 .music-upload strong,
 .music-upload small {
   display: block;
