@@ -264,7 +264,7 @@ test('team primary color saves, reloads, updates, and survives older clients', (
   assert.equal((await handleTeamRequest(request({ ...team(2), primaryColor: '#000000' }), db, 'alice')).status, 200)
   assert.equal((await (await handleTeamRequest(request(), db, 'alice')).json()).team.primaryColor, '#000000')
   await handleTeamRequest(request(team()), db, 'bob')
-  assert.equal((await (await handleTeamRequest(request(), db, 'bob')).json()).team.primaryColor, '#16845b')
+  assert.equal((await (await handleTeamRequest(request(), db, 'bob')).json()).team.primaryColor, '#041c36')
 }))
 test('team theme handles extreme colors and rejects invalid CSS input', () => {
   for (const color of ['#000000', '#ffffff', '#ff0000']) {
@@ -274,7 +274,7 @@ test('team theme handles extreme colors and rejects invalid CSS input', () => {
     assert.notEqual(theme['--team-accent'], '#000000')
     for (const value of Object.values(theme)) assert.match(value, /^#[a-f0-9]{6}([a-f0-9]{2})?$/)
   }
-  assert.equal(createTeamTheme('invalid')['--team-color'], '#16845b')
+  assert.equal(createTeamTheme('invalid')['--team-color'], '#041c36')
 })
 
 test('primary color migration preserves a populated existing team table', () => {

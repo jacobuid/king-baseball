@@ -16,7 +16,7 @@ The Team menu opens `TeamView` at `#/team`, with the saved team details and rost
 
 The optional team `division` field uses the shared choices in `shared/divisions.ts`: T-Ball, coach/machine pitch, 6U–18U, league and school levels, college levels, adult leagues, and professional categories. The Team screen uses a snapping wheel beneath the team name. Use Save Team to persist the selection; `null` clears it, while omitted fields preserve the saved division for older clients.
 
-TeamEdit provides a primary-color swatch beneath the team name, left of Division. `primaryColor` accepts a six-digit hex color (default `#16845b`) and saves with the team. TeamView derives dark surfaces and lighter accents from that choice for the team card, jerseys, division badge, and playback accents. KingSports's navigation and branding retain the app theme. No colors are extracted from uploaded logos.
+TeamEdit provides a primary-color swatch beneath the team name, left of Division. `primaryColor` accepts a six-digit hex color (default `#041c36`) and saves with the team. TeamView derives dark surfaces and lighter accents from that choice for the team card, jerseys, division badge, and playback accents. KingSports's navigation and branding retain the app theme. No colors are extracted from uploaded logos.
 
 The API workflow applies pending migrations, including `0006_b2_team_logos.sql`, before deploying the API. Deploy the API successfully before using the new frontend.
 

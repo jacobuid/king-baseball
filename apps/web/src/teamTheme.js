@@ -1,4 +1,4 @@
-const DEFAULT_COLOR = '#16845b'
+const DEFAULT_COLOR = '#041c36'
 
 export function createTeamTheme(value) {
   const color = typeof value === 'string' && /^#[0-9a-f]{6}$/i.test(value) ? value.toLowerCase() : DEFAULT_COLOR

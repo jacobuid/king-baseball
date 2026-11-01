@@ -97,7 +97,7 @@ export async function handleTeamRequest(request: Request, db: D1Database, userId
   try { logoUrl = logoKey ? await storage.url(logoKey) : null }
   catch { if (uploadedKey) await storage.remove(uploadedKey).catch(() => {}); return json({ error: 'Could not prepare the logo. Please try again.' }, 502) }
   const division = input.division === undefined ? existing?.division ?? null : input.division
-  const primaryColor = input.primaryColor ?? existing?.primary_color ?? '#16845b'
+  const primaryColor = input.primaryColor ?? existing?.primary_color ?? '#041c36'
   const statements = existing ? [
     db.prepare('UPDATE teams SET name = ?,logo_data_url = NULL,logo_key = ?,division = ?,primary_color = ?,version = version + 1,mutation_id = ?,updated_at = CURRENT_TIMESTAMP WHERE id = ? AND owner_user_id = ? AND version = ?').bind(input.name, logoKey, division, primaryColor, mutationId, teamId, userId, input.version),
   ] : [
