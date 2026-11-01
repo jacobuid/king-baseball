@@ -24,11 +24,11 @@ function setup() {
 const request = (path = '', body, method = body === undefined ? 'GET' : 'POST', headers = {}) => new Request('https://api.example' + path, { method, headers: { 'Content-Type': 'application/json', ...headers }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) })
 const auth = { Authorization: 'Bearer test-token' }
 
-test('music drawer renders the upload control directly below search', () => {
+test('walk-up drawer renders upload before its music search', () => {
   const source = readFileSync(new URL('../apps/web/src/MusicDrawer.jsx', import.meta.url), 'utf8')
   const search = source.indexOf('id="music-search"')
   const upload = source.indexOf('className={`music-upload')
-  assert.ok(search >= 0 && upload > search, 'Upload music control must render after the search input')
+  assert.ok(upload >= 0 && search > upload, 'Upload music control must render before the search input')
   assert.match(source, /type="file"[^>]+onChange=\{uploadSong\}/)
   assert.match(source, /youtube\.com\/embed\/.*enablejsapi=1/)
   assert.match(source, /onLoad=\{event => playSearchPreview\(event\.currentTarget\)\}/)
