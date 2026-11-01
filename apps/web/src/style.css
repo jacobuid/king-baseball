@@ -73,3 +73,4 @@
 .sheet-save{display:flex;align-items:center;justify-content:center;gap:10px}
 .team-cancel{display:flex;align-items:center;justify-content:center;width:100%;min-height:54px;margin-top:10px;border-radius:12px;font-size:16px;font-weight:800} 
 #team-name{font-size:14px}
+.music-drawer h2:not(#dialog-title){margin:22px 0 12px}
