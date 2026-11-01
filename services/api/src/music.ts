@@ -56,11 +56,13 @@ export async function handleMusicRequest(request: Request, env: MusicEnv, userId
   if (path === '/api/music/search' && request.method === 'GET') {
     if (!configured(env)) return json({ error: 'Music imports are not configured yet.' }, 503)
     const query = url.searchParams.get('q')?.trim() || ''
+    const type = url.searchParams.get('type') || 'songs'
+    if (!['songs', 'videos'].includes(type)) return json({ error: 'Choose songs or videos' }, 400)
     if (query.length < 3 || query.length > 100) return json({ error: 'Enter 3–100 characters' }, 400)
     const now = Date.now()
     const limit = await env.DB.prepare('INSERT INTO music_search_limits(owner_user_id,requested_at) VALUES(?,?) ON CONFLICT(owner_user_id) DO UPDATE SET requested_at=excluded.requested_at WHERE music_search_limits.requested_at < ? RETURNING requested_at').bind(userId, now, now - 1500).first()
     if (!limit) return json({ error: 'Please wait a moment before searching again.' }, 429)
-    try { return json(await service(env, '/search', { query })) } catch { return json({ error: 'Search is unavailable. Please try again.' }, 502) }
+    try { return json(await service(env, '/search', { query, type })) } catch { return json({ error: 'Search is unavailable. Please try again.' }, 502) }
   }
   if (path === '/api/music/import' && request.method === 'POST') {
     if (!configured(env)) return json({ error: 'Music imports are not configured yet.' }, 503)

@@ -29,13 +29,77 @@ class MusicTests(unittest.TestCase):
         self.assertEqual(self.client.post("/jobs", json={**self.job, "callbackUrl": "https://attacker.example"}, headers=self.headers).status_code, 400)
         self.assertEqual(self.client.post("/jobs", json={**self.job, "videoId": "--exec rm"}, headers=self.headers).status_code, 400)
 
-    @patch.object(service, "run")
-    def test_search_treats_input_as_text_and_filters_results(self, run):
-        run.return_value = '{"entries":[{"id":"abcdefghijk","title":"Song","duration":120},{"id":"ABCDEFGHIJK","duration":9000},{"id":"invalid"}]}'
+    def test_cookie_secret_is_copied_per_job_and_only_youtube_domains_are_used(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            source = directory / "mounted-secret.txt"
+            original = "# Netscape HTTP Cookie File\n.youtube.com\tTRUE\t/\tTRUE\t0\tSID\ttest-youtube-session\n#HttpOnly_.youtube.com\tTRUE\t/\tTRUE\t0\tOTHER\ttest-http-only\n.google.com\tTRUE\t/\tTRUE\t0\tSID\tunrelated-google-session\nnotyoutube.com\tFALSE\t/\tTRUE\t0\tSID\tunrelated-site\n"
+            source.write_text(original)
+            for name in ("job-one", "job-two"):
+                job = directory / name
+                job.mkdir()
+                with patch.dict(os.environ, {"YOUTUBE_COOKIES_FILE": str(source)}):
+                    arguments = service.youtube_cookie_arguments(job)
+                self.assertEqual(arguments[0], "--cookies")
+                cookie_copy = Path(arguments[1])
+                self.assertNotEqual(cookie_copy, source)
+                self.assertIn("test-youtube-session", cookie_copy.read_text())
+                self.assertIn("test-http-only", cookie_copy.read_text())
+                self.assertNotIn("unrelated", cookie_copy.read_text())
+                cookie_copy.write_text("changed by downloader")
+            self.assertEqual(source.read_text(), original)
+
+    def test_missing_or_invalid_cookie_secrets_never_enter_downloader_arguments(self):
+        with patch.dict(os.environ, {"YOUTUBE_COOKIES_FILE": ""}):
+            self.assertEqual(service.youtube_cookie_arguments(Path("unused")), [])
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            source = directory / "secret.txt"
+            for content in ("{\"cookies\":[]}", "# Netscape HTTP Cookie File\nmalformed-secret-value", "# Netscape HTTP Cookie File\n.google.com\tTRUE\t/\tTRUE\t0\tSID\tprivate-value", "x" * 65537):
+                source.write_text(content)
+                with patch.dict(os.environ, {"YOUTUBE_COOKIES_FILE": str(source)}):
+                    with self.assertRaises(RuntimeError) as caught:
+                        service.youtube_cookie_arguments(directory)
+                self.assertNotIn("private-value", str(caught.exception))
+                self.assertNotIn("malformed-secret-value", str(caught.exception))
+
+    @patch.object(service.subprocess, "run")
+    def test_authenticated_failures_never_log_cookie_values(self, run):
+        run.return_value = Mock(returncode=1, stderr="Invalid cookie line: very-private-cookie-value")
+        with self.assertLogs('king_sports.music', level='WARNING') as logs:
+            with self.assertRaises(RuntimeError):
+                service.run(["yt-dlp", "--cookies", "/tmp/private-cookie-jar"])
+        self.assertNotIn("very-private-cookie-value", "".join(logs.output))
+
+    @patch.object(service, "YTMusic")
+    def test_music_search_maps_metadata_and_excludes_unavailable_and_long_tracks(self, client):
+        client.return_value.search.return_value = [
+            {"videoId": "abcdefghijk", "title": "Song", "duration_seconds": 120, "artists": [{"name": "Artist"}], "album": {"name": "Album"}, "isExplicit": True, "thumbnails": [{"url": "https://lh3.googleusercontent.com/artwork"}]},
+            {"videoId": "abcdefghijk", "duration_seconds": 120},
+            {"videoId": "ABCDEFGHIJK", "duration_seconds": 9000},
+            {"videoId": "01234567890", "duration_seconds": 120, "isAvailable": False},
+            {"videoId": "invalid", "duration_seconds": 120},
+        ]
         response = self.client.post("/search", json={"query": "--exec evil"}, headers=self.headers)
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(len(response.json()["results"]), 1)
-        self.assertEqual(run.call_args.args[0][-1], "ytsearch8:--exec evil")
+        self.assertEqual(response.json()["results"], [{"videoId": "abcdefghijk", "title": "Song", "artist": "Artist", "album": "Album", "isExplicit": True, "duration": 120, "thumbnail": "https://lh3.googleusercontent.com/artwork"}])
+        client.return_value.search.assert_called_once_with("--exec evil", filter="songs", limit=8)
+        self.assertNotIn("auth", client.call_args.kwargs)
+
+    @patch.object(service, "YTMusic")
+    def test_video_search_handles_missing_metadata_and_rejects_bad_filter(self, client):
+        client.return_value.search.return_value = [{"videoId": "abcdefghijk", "duration_seconds": 120, "thumbnails": [{"url": "https://unrelated.example/image"}]}]
+        response = self.client.post("/search", json={"query": "song", "type": "videos"}, headers=self.headers)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["results"][0]["thumbnail"], "https://i.ytimg.com/vi/abcdefghijk/mqdefault.jpg")
+        self.assertIsNone(response.json()["results"][0]["isExplicit"])
+        client.return_value.search.assert_called_once_with("song", filter="videos", limit=8)
+        self.assertEqual(self.client.post("/search", json={"query": "song", "type": "uploads"}, headers=self.headers).status_code, 422)
+
+    @patch.object(service, "YTMusic")
+    def test_upstream_music_search_failure_is_reported(self, client):
+        client.return_value.search.side_effect = requests.Timeout("upstream timeout")
+        self.assertEqual(self.client.post("/search", json={"query": "song"}, headers=self.headers).status_code, 502)
 
     @patch.object(service.tasks_v2, "CloudTasksClient")
     def test_import_is_queued_not_run_in_background_thread(self, client):

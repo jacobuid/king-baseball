@@ -1,7 +1,7 @@
 # KingSports music
 
 React search drawer → authenticated Cloudflare API → Google Cloud Run (FastAPI,
-yt-dlp, FFmpeg) → Cloud Tasks → private B2 `music/` prefix. D1 tracks job states,
+ytmusicapi, yt-dlp, FFmpeg) → Cloud Tasks → private B2 `music/` prefix. D1 tracks job states,
 account ownership, and ordered assignments. Cloud Tasks keeps each conversion
 inside a billed HTTP request, rather than an unreliable background thread after
 the response. Closing the drawer does not cancel the import.
@@ -10,7 +10,11 @@ AAC audio is copied into an M4A container with fast-start metadata. Other source
 codecs are converted to AAC for iPhone/Android/browser compatibility. No MP3 is
 required. Limits: 20-minute source, 50 MB audio, 100 imports/day, 500 library
 entries/account. Search debounces 1.6 seconds and returns eight results; it uses
-yt-dlp search rather than the YouTube Data API, so no YouTube API key is required.
+anonymous ytmusicapi catalog search rather than the YouTube Data API, so no
+YouTube API key or account session is required for search. Songs is the default
+category; users can switch to Videos. Results include artist, album, artwork,
+duration, and an explicit-content indicator when that metadata is available.
+yt-dlp still performs downloads; ytmusicapi does not resolve download sign-in checks.
 Source availability from Google's network must be tested after deployment.
 
 Team playlists contain full tracks, ordered independently of player assignments.
@@ -43,6 +47,14 @@ new music secrets in the existing Worker. It also saves the token/service URL
 as GitHub secrets for future infrastructure provisioning. Run it again to update
 the service; it preserves the token and existing B2 keys.
 
+Before provisioning, the script requires a verified, active Cloud Run spend cap
+of $1/month or less for this project. An alerts-only budget does not qualify.
+Keep the existing $0 billing alert as an additional notification. The cap uses
+gross estimated costs before credits/free allowances; it can pause imports even
+when the actual bill remains zero. Enforcement is delayed and excludes supporting
+services such as Artifact Registry and Cloud Build, so this is not an exact cap
+on the entire Google bill. The script never lifts a cap that has been enforced.
+
 The Cloud Run HTTP endpoint is public at the network level because both the
 Worker and Cloud Tasks reach it; every route requires the private service token.
 No browser receives that token or B2 credentials. Source deployment requires
@@ -56,6 +68,32 @@ Run the music deployment script before trying imports. Nothing in the setup
 script automatically pushes application code.
 
 ## Checks and operations
+
+### Optional YouTube authentication
+
+The deployed service can search anonymously, but the live download test received
+YouTube's sign-in/bot-verification response from Cloud Run. Cookies may help;
+they do not guarantee access from Google's network.
+
+Export only YouTube cookies as a Netscape-format `cookies.txt` file, following
+[yt-dlp's guide](https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies).
+Use a separate account if possible. Keep the file out of chat and GitHub.
+In Google Secret Manager, create the secret `king-sports-youtube-cookies` and
+use **Upload file** to add its value. Project: `project-f398dc10-2417-49db-aa6`.
+
+The deployment script detects an enabled version without reading its contents,
+grants the runtime account access to that secret, and mounts it at
+`/secrets/youtube/cookies.txt`. Run the deployment script after adding the secret
+to activate this optional support. No browser extraction is performed by the app.
+Anonymous search stays unchanged; only download commands use the cookie file.
+Each job makes its own private writable copy, filters out non-YouTube domains,
+and removes the copy with the temporary working directory. Authenticated
+command errors omit raw stderr so cookie parser errors cannot leak cookie rows.
+
+Refresh expired cookies by uploading a new secret version. The mounted `latest`
+version is read on each import. Disable older versions when no longer needed to
+avoid accumulating active-version charges. To remove authentication entirely,
+remove the Cloud Run secret mount and `YOUTUBE_COOKIES_FILE` environment setting.
 
 ```powershell
 npm.cmd run check

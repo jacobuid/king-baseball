@@ -1,10 +1,12 @@
 """KingSports private importer. Cloud Tasks owns the lifetime of every import."""
 import hmac
 import json
+import logging
 import os
 import re
 import subprocess
 import tempfile
+from typing import Literal
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -13,6 +15,8 @@ from fastapi import Depends, FastAPI, Header, HTTPException
 from google.cloud import tasks_v2
 from google.protobuf import duration_pb2
 from pydantic import BaseModel, Field
+from ytmusicapi import YTMusic
+from ytmusicapi.exceptions import YTMusicError
 
 app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
 VIDEO = re.compile(r"^[A-Za-z0-9_-]{11}$")
@@ -29,6 +33,15 @@ def run(arguments, timeout=120):
     # Never run a shell or accept user-supplied yt-dlp flags/URLs.
     result = subprocess.run(arguments, capture_output=True, text=True, timeout=timeout)
     if result.returncode:
+        diagnostic = result.stderr[-2000:]
+        if "--cookies" in arguments:
+            # Parser errors can echo a cookie row. Keep authenticated stderr private.
+            diagnostic = "Authenticated download failed; detailed output withheld"
+            for needle, message in (("not a bot", "YouTube still requires sign-in verification"), ("HTTP Error 403", "Source returned HTTP 403"), ("PO Token", "Source requires an additional playback token"), ("cookies are no longer valid", "YouTube session cookies are no longer valid")):
+                if needle in result.stderr:
+                    diagnostic = message
+                    break
+        logging.getLogger('king_sports.music').warning('Media command failed (%s): %s', arguments[0], diagnostic)
         raise RuntimeError("Media processing failed")
     return result.stdout
 
@@ -37,8 +50,66 @@ def downloader(*args):
     return ["yt-dlp", "--ignore-config", "--js-runtimes", "node", "--no-playlist", "--no-warnings", "--socket-timeout", "20", *args]
 
 
+def youtube_cookie_arguments(directory):
+    configured = os.environ.get("YOUTUBE_COOKIES_FILE")
+    if not configured:
+        return []
+    source = Path(configured)
+    if source.stat().st_size > 65536:
+        raise RuntimeError("YouTube cookie file exceeds the secret size limit")
+    lines = source.read_text(encoding="utf-8-sig").splitlines()
+    if not lines or lines[0].strip() not in ("# Netscape HTTP Cookie File", "# HTTP Cookie File"):
+        raise RuntimeError("YouTube cookies must use Netscape cookies.txt format")
+    selected = ["# Netscape HTTP Cookie File"]
+    for line in lines[1:]:
+        if not line.strip() or (line.startswith("#") and not line.startswith("#HttpOnly_")):
+            continue
+        fields = line.split("\t")
+        if len(fields) != 7:
+            raise RuntimeError("Invalid YouTube cookie file format")
+        domain = fields[0].removeprefix("#HttpOnly_").lstrip(".").lower()
+        # An accidental whole-browser export must not send other account cookies.
+        if domain == "youtube.com" or domain.endswith(".youtube.com"):
+            selected.append(line)
+    if len(selected) == 1:
+        raise RuntimeError("Cookie file contains no YouTube cookies")
+    # yt-dlp rewrites its cookie jar. Never write back to the read-only secret mount
+    # or share a mutable jar between simultaneous requests.
+    cookie_copy = directory / "youtube-cookies.txt"
+    cookie_copy.touch(mode=0o600, exist_ok=False)
+    cookie_copy.write_text("\n".join(selected) + "\n", encoding="utf-8")
+    return ["--cookies", str(cookie_copy)]
+
+
 class Search(BaseModel):
     query: str = Field(min_length=3, max_length=100)
+    type: Literal["songs", "videos"] = "songs"
+
+
+class MusicSession(requests.Session):
+    def request(self, method, url, **kwargs):
+        kwargs.setdefault("timeout", 15)
+        return super().request(method, url, **kwargs)
+
+
+def music_result(entry):
+    video_id = entry.get("videoId", "")
+    duration = entry.get("duration_seconds")
+    if not isinstance(video_id, str) or not VIDEO.fullmatch(video_id) or entry.get("isAvailable") is False:
+        return None
+    if not isinstance(duration, (int, float)) or isinstance(duration, bool) or not 0 < duration <= 1200:
+        return None
+    artist = ", ".join(a["name"] for a in entry.get("artists", []) if isinstance(a, dict) and isinstance(a.get("name"), str))
+    thumbnail = f"https://i.ytimg.com/vi/{video_id}/mqdefault.jpg"
+    for candidate in reversed(entry.get("thumbnails") or []):
+        url = candidate.get("url", "") if isinstance(candidate, dict) else ""
+        parsed = urlparse(url)
+        host = parsed.hostname or ""
+        if parsed.scheme == "https" and any(host == domain or host.endswith("." + domain) for domain in ("googleusercontent.com", "ytimg.com", "ggpht.com")):
+            thumbnail = url
+            break
+    album = entry.get("album") or {}
+    return {"videoId": video_id, "title": str(entry.get("title") or "Untitled")[:200], "artist": artist[:100], "album": str(album.get("name") or "")[:150] if isinstance(album, dict) else "", "duration": duration, "thumbnail": thumbnail, "isExplicit": entry.get("isExplicit") if isinstance(entry.get("isExplicit"), bool) else None}
 
 
 class Job(BaseModel):
@@ -58,11 +129,20 @@ def check_job(job):
 @app.post("/search", dependencies=[Depends(authenticated)])
 def search(body: Search):
     try:
-        # Search text is always prefixed, never treated as an arbitrary URL.
-        output = run(downloader("--flat-playlist", "--dump-single-json", "--playlist-end", "8", "--", f"ytsearch8:{body.query.strip()}"), timeout=20)
-        entries = json.loads(output).get("entries") or []
-        return {"results": [{"videoId": e["id"], "title": str(e.get("title") or "Untitled")[:200], "artist": str(e.get("uploader") or e.get("channel") or "")[:100], "duration": e.get("duration"), "thumbnail": f"https://i.ytimg.com/vi/{e['id']}/mqdefault.jpg"} for e in entries if VIDEO.fullmatch(e.get("id", "")) and not e.get("is_live") and (e.get("duration") or 0) <= 1200]}
-    except (RuntimeError, subprocess.TimeoutExpired, ValueError):
+        # Each request has an anonymous client/session; no account cookies are used.
+        with MusicSession() as session:
+            entries = YTMusic(requests_session=session).search(body.query.strip(), filter=body.type, limit=8)
+        results = []
+        seen = set()
+        for entry in entries:
+            result = music_result(entry)
+            if result and result["videoId"] not in seen:
+                results.append(result)
+                seen.add(result["videoId"])
+            if len(results) == 8:
+                break
+        return {"results": results}
+    except (YTMusicError, requests.RequestException, ValueError, KeyError, IndexError):
         raise HTTPException(502, "Search unavailable")
 
 
@@ -90,7 +170,7 @@ def callback(job, method="GET", data=None, suffix=""):
 def prepare_audio(directory, video_id):
     source = f"https://www.youtube.com/watch?v={video_id}"
     # Prefer native AAC/M4A for broad iPhone/Android support, avoiding re-encoding.
-    run(downloader("--max-filesize", "50M", "--match-filters", "!is_live & duration <= 1200", "--write-info-json", "--no-write-thumbnail", "-f", "bestaudio[ext=m4a]/bestaudio", "-o", str(directory / "source.%(ext)s"), "--", source), timeout=540)
+    run(downloader(*youtube_cookie_arguments(directory), "--max-filesize", "50M", "--match-filters", "!is_live & duration <= 1200", "--write-info-json", "--no-write-thumbnail", "-f", "bestaudio[ext=m4a]/bestaudio", "-o", str(directory / "source.%(ext)s"), "--", source), timeout=540)
     candidates = [p for p in directory.glob("source.*") if p.suffix in (".m4a", ".webm", ".opus", ".ogg", ".mp4")]
     if len(candidates) != 1 or candidates[0].stat().st_size > 50 * 1024 * 1024:
         raise RuntimeError("No suitable audio stream")

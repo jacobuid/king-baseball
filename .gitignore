@@ -146,6 +146,7 @@ vite.config.ts.timestamp-*
 .dev.vars
 __pycache__/
 *.pyc
+*cookies*.txt
 .pulumi/
 services/api/.deployment-secrets.json
 
