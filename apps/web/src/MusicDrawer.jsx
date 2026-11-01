@@ -81,6 +81,7 @@ export function MusicDrawer({ api, target, player, onClose, onAssigned }) {
   const [recordingCountdown, setRecordingCountdown] = useState(null)
   const active = useRef(true)
   const preview = useRef(null)
+  const introPreview = useRef(null)
   const loadedPreviewId = useRef(null)
   const searchPreviewFrame = useRef(null)
   const previewSequence = useRef(0)
@@ -106,13 +107,14 @@ export function MusicDrawer({ api, target, player, onClose, onAssigned }) {
         }
       }
     } }).catch(e => { if (active.current) setError(e.message) })
-    return () => { active.current = false; previewSequence.current++; preview.current?.pause(); clearTimeout(closeTimer.current); clearInterval(clipTimer.current); recorder.current?.state === 'recording' && recorder.current.stop() }
+    return () => { active.current = false; previewSequence.current++; preview.current?.pause(); introPreview.current?.pause(); clearTimeout(closeTimer.current); clearInterval(clipTimer.current); recorder.current?.state === 'recording' && recorder.current.stop() }
   }, [api, target, retry])
   function closeDrawer() {
     if (closing) return
     setClosing(true)
     previewSequence.current++
     preview.current?.pause()
+    introPreview.current?.pause()
     clearInterval(clipTimer.current)
     setClipPlaying(false)
     setPlayingTrackId(null)
@@ -281,6 +283,7 @@ export function MusicDrawer({ api, target, player, onClose, onAssigned }) {
   function chooseClip(track) {
     previewSequence.current++
     preview.current?.pause()
+    introPreview.current?.pause()
     clearInterval(clipTimer.current)
     setClipPlaying(false)
     const current = player.song?.id === track.id ? clampClip(track, player.song.clipStart, player.song.clipDuration) : clampClip(track, 0, 15)
@@ -311,34 +314,36 @@ export function MusicDrawer({ api, target, player, onClose, onAssigned }) {
   }
   async function previewWalkup(track) {
     const element = preview.current
-    if (!element) return
+    const introElement = introPreview.current
+    if (!element || !introElement) return
     if (clipPlaying) {
       previewSequence.current++
       clearInterval(clipTimer.current)
-      element.pause(); element.volume = 1; setClipPlaying(false); setPlayingTrackId(null)
+      introElement.pause(); element.pause(); element.volume = 1; setClipPlaying(false); setPlayingTrackId(null)
       return
     }
     const sequence = ++previewSequence.current
     clearInterval(clipTimer.current)
-    element.pause(); element.volume = 1
+    introElement.pause(); element.pause(); element.volume = 1
     setPlayingTrackId(null); setClipPlaying(true); setError('')
     try {
       const intro = library.tracks.find(item => item.id === introTrackId)
       if (!intro) throw new Error('Record or upload the announcer intro first.')
       const [introPlayback, songPlayback] = await Promise.all([api(`/${intro.id}/play`, {}), api(`/${track.id}/play`, {})])
       if (!active.current || sequence !== previewSequence.current) return
-      element.src = introPlayback.url
-      element.load()
-      if (element.readyState < 1) await new Promise((resolve, reject) => {
+      introElement.src = introPlayback.url
+      introElement.load()
+      if (introElement.readyState < 1) await new Promise((resolve, reject) => {
         const ready = () => { cleanup(); resolve() }
         const failed = () => { cleanup(); reject(new Error('The clip could not be loaded.')) }
-        const cleanup = () => { element.removeEventListener('loadedmetadata', ready); element.removeEventListener('error', failed) }
-        element.addEventListener('loadedmetadata', ready); element.addEventListener('error', failed)
+        const cleanup = () => { introElement.removeEventListener('loadedmetadata', ready); introElement.removeEventListener('error', failed) }
+        introElement.addEventListener('loadedmetadata', ready); introElement.addEventListener('error', failed)
       })
       if (!active.current || sequence !== previewSequence.current) return
-      element.volume = 1
-      await element.play()
-      await new Promise(resolve => element.addEventListener('ended', resolve, { once: true }))
+      introElement.volume = 1
+      await introElement.play()
+      const introDuration = Number.isFinite(introElement.duration) ? introElement.duration : Number(intro.duration) || 0
+      await new Promise(resolve => setTimeout(resolve, Math.max(0, introDuration - .9) * 1000))
       if (!active.current || sequence !== previewSequence.current) return
       loadedPreviewId.current = track.id
       element.src = songPlayback.url
@@ -413,6 +418,7 @@ export function MusicDrawer({ api, target, player, onClose, onAssigned }) {
       {!songTracks.length && <p>Search above to import your first song.</p>}
       {songTracks.map(track => <article key={track.id} className="music-library-track"><div><strong>{track.title}</strong><small>{track.artist} {time(track.duration)}{track.status !== 'ready' && ` · ${track.status}`}</small>{track.status === 'failed' && <small>{track.error}</small>}</div>{track.status === 'ready' ? <><button type="button" className={`music-preview button-tertiary${playingTrackId === track.id ? ' playing' : ''}`} aria-label={`${playingTrackId === track.id ? 'Pause' : 'Play'} ${track.title}`} aria-pressed={playingTrackId === track.id} onClick={() => listen(track)}><Icon name={playingTrackId === track.id ? 'pause' : 'play'} size={14} /></button>{team ? <input type="checkbox" aria-label={`Include ${track.title} in team playlist`} checked={selected.includes(track.id)} onChange={e => setSelected(e.target.checked ? [...selected, track.id] : selected.filter(id => id !== track.id))} /> : <button type="button" className="button-secondary" disabled={busy} onClick={() => chooseClip(track)}>{clipTrackId === track.id ? 'Edit clip' : 'Set clip'}</button>}</> : track.status === 'failed' ? <button type="button" className="button-secondary" disabled={busy} onClick={() => setConfirmation({ type: 'import', track })}>Retry</button> : <span className="music-pending" role="status">Importing…</span>}{['ready', 'failed'].includes(track.status) && <button type="button" className="music-delete-button" disabled={busy} aria-label={`Delete ${track.title} from Your music`} onClick={() => setConfirmation({ type: 'delete', track })}><Icon name="trash" size={15} /></button>}</article>)}
       {!team && <WalkupClipEditor track={library.tracks.find(track => track.id === clipTrackId)} player={player} intro={library.tracks.find(track => track.id === introTrackId)} start={clipStart} duration={clipDuration} playing={clipPlaying} recording={recording} countdown={recordingCountdown} busy={busy} onStart={clip => { setClipStart(clip.start); setClipDuration(clip.duration) }} onDuration={clip => setClipDuration(clip.duration)} onPreview={() => previewWalkup(library.tracks.find(track => track.id === clipTrackId))} onRecord={toggleRecording} onIntroUpload={uploadIntro} onSave={() => assign([{ id: clipTrackId, start: clipStart, duration: clipDuration, introId: introTrackId }])} />}
+      <audio ref={introPreview} hidden aria-hidden="true" />
       <audio ref={preview} className="music-audio-preview" aria-hidden="true" onEnded={() => setPlayingTrackId(null)} onError={() => { setPlayingTrackId(null); setClipPlaying(false); setError('Preview could not play. Try again.') }} />
       {team && <><h2 className="music-playlist-heading">Your Playlist</h2><ol className="music-order">{selected.map((id, index) => <li key={id}><span>{library.tracks.find(t => t.id === id)?.title}</span><button type="button" disabled={index === 0} aria-label="Move song earlier" onClick={() => setSelected(list => { const copy = [...list]; [copy[index - 1], copy[index]] = [copy[index], copy[index - 1]]; return copy })}>↑</button><button type="button" disabled={index === selected.length - 1} aria-label="Move song later" onClick={() => setSelected(list => { const copy = [...list]; [copy[index], copy[index + 1]] = [copy[index + 1], copy[index]]; return copy })}>↓</button></li>)}</ol><button type="button" className="sheet-save button-primary" disabled={busy} onClick={() => assign(selected)}>{busy ? 'Saving…' : <><Icon name="save" size={16} />Save Playlist</>}</button><button type="button" className="drawer-cancel button-secondary" disabled={busy} onClick={closeDrawer}>Cancel</button></>}
       {!team && <button type="button" className="remove-song" disabled={busy} onClick={() => assign([])}>Remove walk-up song</button>}

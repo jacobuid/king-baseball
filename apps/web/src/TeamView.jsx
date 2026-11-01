@@ -62,7 +62,8 @@ export function TeamView({ userId, onEdit }) {
           if (disposed) return
           introElement.src = introUrl
           await introElement.play()
-          await new Promise(resolve => introElement.addEventListener('ended', resolve, { once: true }))
+          const introDuration = Number(activeSong.intro.duration) || 0
+          await new Promise(resolve => setTimeout(resolve, Math.max(0, introDuration - .9) * 1000))
           if (disposed) return
         }
         element.src = songUrl
