@@ -12,6 +12,7 @@ import './zoom.css'
 import './orientation.css'
 import './music-drawer.css'
 import './teams-page.css'
+import './swipe-delete.css'
 
 const key = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
 const appUrl = new URL(import.meta.env.BASE_URL, window.location.origin).href

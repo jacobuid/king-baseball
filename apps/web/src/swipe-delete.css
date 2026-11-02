@@ -1,0 +1,8 @@
+[data-swipe-row]{position:relative;isolation:isolate;overflow:hidden;touch-action:pan-y;background:#c94343}
+[data-swipe-row]::before{content:"";position:absolute;z-index:1;inset:0;background:var(--swipe-surface,#fff);transform:translateX(var(--swipe-offset,0));transition:transform .22s cubic-bezier(.22,1,.36,1);pointer-events:none}
+[data-swipe-row]>*:not(.remove-btn):not(.team-list-delete){position:relative;z-index:2;transform:translateX(var(--swipe-offset,0));transition:transform .22s cubic-bezier(.22,1,.36,1)}
+[data-swipe-row]>.remove-btn,[data-swipe-row]>.team-list-delete{position:absolute;z-index:0;top:0;right:0;width:72px;height:100%;display:grid;place-items:center;border:0;background:#c94343;color:#fff}
+.player[data-swipe-row]{--swipe-surface:#fff}
+.team-list-card[data-swipe-row]{--swipe-surface:#071a2a}
+[data-swipe-row].reorder-dragging::before,[data-swipe-row].reorder-dragging>*:not(.remove-btn){transform:none}
+@media(prefers-reduced-motion:reduce){[data-swipe-row]::before,[data-swipe-row]>*{transition:none!important}}

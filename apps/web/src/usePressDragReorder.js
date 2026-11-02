@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 
-export function usePressDragReorder({ disabled = false, onStart, onMove, onDrop }) {
+export function usePressDragReorder({ disabled = false, swipeOnly = false, onStart, onMove, onDrop }) {
   const [draggingId, setDraggingId] = useState(null)
   const [overId, setOverId] = useState(null)
+  const [revealedId, setRevealedId] = useState(null)
+  const [swipeOffset, setSwipeOffset] = useState(0)
   const gesture = useRef(null)
   const suppressClick = useRef(false)
   const autoScroll = useRef({ frame: null, speed: 0 })
@@ -47,6 +49,12 @@ export function usePressDragReorder({ disabled = false, onStart, onMove, onDrop 
     stopAutoScroll()
     removeWindowListeners(current)
     gesture.current = null
+    if (current.swiping) {
+      const reveal = !cancelled && current.swipeOffset < -34
+      setRevealedId(reveal ? current.id : null)
+      setSwipeOffset(reveal ? -72 : 0)
+      current.suppressClick = true
+    }
     setDraggingId(null)
     setOverId(null)
     if (current.suppressClick) { suppressClick.current = true; setTimeout(() => { suppressClick.current = false }, 0) }
@@ -55,7 +63,19 @@ export function usePressDragReorder({ disabled = false, onStart, onMove, onDrop 
   function moveGesture(event, current) {
     if (gesture.current !== current || event.pointerId !== current.pointerId) return
     if (!current.active) {
-      if (!current.scrolling && Math.hypot(event.clientX - current.x, event.clientY - current.y) > 9) {
+      const dx = event.clientX - current.x
+      const dy = event.clientY - current.y
+      if (!current.scrolling && !current.swiping && Math.abs(dx) > 9 && Math.abs(dx) > Math.abs(dy) * 1.15) {
+        clearTimer()
+        current.swiping = true
+      }
+      if (current.swiping) {
+        event.preventDefault()
+        current.swipeOffset = Math.max(-72, Math.min(0, dx + (current.startedRevealed ? -72 : 0)))
+        setSwipeOffset(current.swipeOffset)
+        return
+      }
+      if (!current.scrolling && Math.hypot(dx, dy) > 9) {
         clearTimer()
         current.scrolling = true
       }
@@ -100,14 +120,19 @@ export function usePressDragReorder({ disabled = false, onStart, onMove, onDrop 
   }, [])
 
   function bind(id, baseClass = '') {
-    const className = `${baseClass}${draggingId === id ? ' reorder-dragging' : ''}${overId === id && draggingId !== id ? ' reorder-over' : ''}`
+    const swiped = revealedId === id
+    const className = `${baseClass}${draggingId === id ? ' reorder-dragging' : ''}${overId === id && draggingId !== id ? ' reorder-over' : ''}${swiped ? ' swipe-revealed' : ''}`
     return {
       'data-reorder-id': id,
+      'data-swipe-row': true,
       className,
+      style: { '--swipe-offset': `${swiped ? swipeOffset : 0}px` },
       onPointerDown(event) {
-        if (disabled || event.button > 0 || event.target.closest('button,input,a,label')) return
+        if (disabled || event.button > 0 || event.target.closest('.remove-btn,.team-list-delete,input,a,label')) return
+        if (event.target.closest('button:not(.team-list-select)') && !swiped) return
         finish(true)
-        const current = { id, pointerId: event.pointerId, isTouch: event.pointerType === 'touch', x: event.clientX, y: event.clientY, lastY: event.clientY, active: false, scrolling: false, suppressClick: false }
+        if (revealedId && revealedId !== id) { setRevealedId(null); setSwipeOffset(0) }
+        const current = { id, pointerId: event.pointerId, isTouch: event.pointerType === 'touch', x: event.clientX, y: event.clientY, lastY: event.clientY, active: false, scrolling: false, swiping: false, swipeOffset: swiped ? -72 : 0, startedRevealed: swiped, suppressClick: false }
         current.listeners = {
           move: moveEvent => moveGesture(moveEvent, current),
           up: upEvent => { if (upEvent.pointerId === current.pointerId) finish(false) },
@@ -130,7 +155,7 @@ export function usePressDragReorder({ disabled = false, onStart, onMove, onDrop 
           window.addEventListener('pointerup', current.listeners.up, { capture: true })
           window.addEventListener('pointercancel', current.listeners.cancel, { capture: true })
         }
-        current.timer = setTimeout(() => {
+        if (!swipeOnly) current.timer = setTimeout(() => {
           if (gesture.current !== current) return
           current.active = true
           current.suppressClick = true
