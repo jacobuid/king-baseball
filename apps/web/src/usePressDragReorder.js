@@ -70,7 +70,7 @@ export function usePressDragReorder({ disabled = false, onStart, onMove, onDrop 
     event.preventDefault()
     const target = document.elementFromPoint(event.clientX, event.clientY)?.closest?.('[data-reorder-id]')
     const targetId = target?.dataset.reorderId
-    if (targetId && targetId !== current.overId && performance.now() - (current.lastSwap || 0) > 180) {
+    if (targetId && targetId !== current.overId && performance.now() - (current.lastSwap || 0) > 220) {
       const before = new Map([...document.querySelectorAll('[data-reorder-id]')].map(row => [row.dataset.reorderId, row.getBoundingClientRect()]))
       current.lastSwap = performance.now()
       current.overId = targetId
@@ -86,7 +86,7 @@ export function usePressDragReorder({ disabled = false, onStart, onMove, onDrop 
           if (Math.abs(delta) < 1 || !row.animate) return
           reorderAnimations.current.get(row)?.cancel()
           const scale = row.dataset.reorderId === current.id ? ' scale(1.045)' : ''
-          const animation = row.animate([{ transform: `translateY(${delta}px)${scale}` }, { transform: `translateY(0)${scale}` }], { duration: 320, easing: 'cubic-bezier(.22, 1, .36, 1)' })
+          const animation = row.animate([{ transform: `translateY(${delta}px)${scale}` }, { transform: `translateY(0)${scale}` }], { duration: 400, easing: 'cubic-bezier(.22, 1, .36, 1)' })
           reorderAnimations.current.set(row, animation)
           animation.onfinish = () => reorderAnimations.current.delete(row)
         })
