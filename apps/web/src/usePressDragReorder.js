@@ -16,6 +16,9 @@ export function usePressDragReorder({ disabled = false, onStart, onMove, onDrop 
     window.removeEventListener('pointermove', current.listeners.move, true)
     window.removeEventListener('pointerup', current.listeners.up, true)
     window.removeEventListener('pointercancel', current.listeners.cancel, true)
+    window.removeEventListener('touchmove', current.listeners.touchMove, true)
+    window.removeEventListener('touchend', current.listeners.touchEnd, true)
+    window.removeEventListener('touchcancel', current.listeners.touchCancel, true)
   }
   function stopAutoScroll() {
     if (autoScroll.current.frame) cancelAnimationFrame(autoScroll.current.frame)
@@ -56,6 +59,7 @@ export function usePressDragReorder({ disabled = false, onStart, onMove, onDrop 
         clearTimer()
         current.scrolling = true
       }
+      if (current.isTouch) return
       if (current.scrolling) {
         event.preventDefault()
         window.scrollBy({ top: current.lastY - event.clientY })
@@ -103,15 +107,29 @@ export function usePressDragReorder({ disabled = false, onStart, onMove, onDrop 
       onPointerDown(event) {
         if (disabled || event.button > 0 || event.target.closest('button,input,a,label')) return
         finish(true)
-        const current = { id, pointerId: event.pointerId, x: event.clientX, y: event.clientY, lastY: event.clientY, active: false, scrolling: false, suppressClick: false }
+        const current = { id, pointerId: event.pointerId, isTouch: event.pointerType === 'touch', x: event.clientX, y: event.clientY, lastY: event.clientY, active: false, scrolling: false, suppressClick: false }
         current.listeners = {
           move: moveEvent => moveGesture(moveEvent, current),
           up: upEvent => { if (upEvent.pointerId === current.pointerId) finish(false) },
           cancel: cancelEvent => { if (cancelEvent.pointerId === current.pointerId) finish(true) },
+          touchMove: moveEvent => {
+            const touch = moveEvent.touches[0]
+            if (!touch) return
+            if (current.active) moveEvent.preventDefault()
+            moveGesture({ clientX: touch.clientX, clientY: touch.clientY, pointerId: current.pointerId, preventDefault: () => moveEvent.preventDefault() }, current)
+          },
+          touchEnd: () => finish(false),
+          touchCancel: () => finish(true),
         }
-        window.addEventListener('pointermove', current.listeners.move, { passive: false, capture: true })
-        window.addEventListener('pointerup', current.listeners.up, { capture: true })
-        window.addEventListener('pointercancel', current.listeners.cancel, { capture: true })
+        if (current.isTouch) {
+          window.addEventListener('touchmove', current.listeners.touchMove, { passive: false, capture: true })
+          window.addEventListener('touchend', current.listeners.touchEnd, { capture: true })
+          window.addEventListener('touchcancel', current.listeners.touchCancel, { capture: true })
+        } else {
+          window.addEventListener('pointermove', current.listeners.move, { passive: false, capture: true })
+          window.addEventListener('pointerup', current.listeners.up, { capture: true })
+          window.addEventListener('pointercancel', current.listeners.cancel, { capture: true })
+        }
         current.timer = setTimeout(() => {
           if (gesture.current !== current) return
           current.active = true

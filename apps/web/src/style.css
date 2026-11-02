@@ -78,7 +78,6 @@
 .music-drawer .music-library-heading{margin-top:26px;padding-top:24px;border-top:1px solid #d7e2ed}
 .music-library-track{border-bottom:0}
 .player,.view-player{touch-action:pan-y;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;transition:transform .16s ease,opacity .16s ease,box-shadow .16s ease,border-color .16s ease}
-@media (pointer:coarse){.player,.view-player{touch-action:none}}
 .player.reorder-dragging,.view-player.reorder-dragging{position:relative;z-index:10;touch-action:none;opacity:1;transform:scale(1.045);cursor:grabbing;filter:brightness(1.06)}
 .player.reorder-dragging{border:2px solid #2d7ed1;background:#eef6ff;box-shadow:0 0 0 4px #2d7ed12e,0 18px 42px #06172d55}
 .view-player.reorder-dragging{border:2px solid var(--team-accent);box-shadow:0 0 0 4px var(--team-glow),0 20px 46px #000a}
