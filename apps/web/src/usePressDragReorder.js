@@ -29,7 +29,7 @@ export function usePressDragReorder({ disabled = false, onStart, onMove, onDrop 
       onPointerDown(event) {
         if (disabled || event.button > 0 || event.target.closest('button,input,a,label')) return
         const row = event.currentTarget
-        const current = { id, row, x: event.clientX, y: event.clientY, active: false, suppressClick: false }
+        const current = { id, row, x: event.clientX, y: event.clientY, lastY: event.clientY, active: false, scrolling: false, suppressClick: false }
         current.timer = setTimeout(() => {
           if (gesture.current !== current) return
           current.active = true
@@ -45,7 +45,15 @@ export function usePressDragReorder({ disabled = false, onStart, onMove, onDrop 
         const current = gesture.current
         if (!current || current.id !== id) return
         if (!current.active) {
-          if (Math.hypot(event.clientX - current.x, event.clientY - current.y) > 9) finish(true)
+          if (!current.scrolling && Math.hypot(event.clientX - current.x, event.clientY - current.y) > 9) {
+            clearTimer()
+            current.scrolling = true
+          }
+          if (current.scrolling) {
+            event.preventDefault()
+            window.scrollBy({ top: current.lastY - event.clientY })
+            current.lastY = event.clientY
+          }
           return
         }
         event.preventDefault()
