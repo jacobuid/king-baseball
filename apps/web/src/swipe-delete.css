@@ -6,3 +6,4 @@
 .team-list-card[data-swipe-row]{--swipe-surface:#071a2a}
 [data-swipe-row].reorder-dragging::before,[data-swipe-row].reorder-dragging>*:not(.remove-btn){transform:none}
 @media(prefers-reduced-motion:reduce){[data-swipe-row]::before,[data-swipe-row]>*{transition:none!important}}
+.delete-player-dialog p{font-size:15px;line-height:1.6}.delete-player-confirm{width:100%;min-height:54px;border:0;border-radius:12px;background:#c94343;color:#fff;font-weight:850}.delete-player-dialog .team-cancel{width:100%;min-height:54px;margin-top:12px}
