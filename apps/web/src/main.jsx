@@ -74,7 +74,7 @@ function App() {
     : route.page === 'edit'
       ? <TeamEdit key={`edit-${route.teamId || 'new'}`} userId={user.id} teamId={route.teamId} onDirtyChange={onDirtyChange} onSavingChange={onSavingChange} onSaved={saved => go(`#/team/${saved.id}`)} onCancel={() => go(route.teamId ? `#/team/${route.teamId}` : '#/teams')} />
       : <TeamView key={`view-${route.teamId}`} userId={user.id} teamId={route.teamId} onEdit={() => go(`#/team/${route.teamId}/edit`)} />
-  return <div className={`app ${route.page === 'view' ? 'team-view-app' : ''}`}>
+  return <div className={`app ${route.page === 'view' || route.page === 'teams' ? 'team-view-app' : ''}`}>
     <Header account={<UserButton />} />
     {content}
     <nav className="bottom-nav" aria-label="Main menu" onClick={event => {
