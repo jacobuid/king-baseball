@@ -5,21 +5,43 @@ export function usePressDragReorder({ disabled = false, onStart, onMove, onDrop 
   const [overId, setOverId] = useState(null)
   const gesture = useRef(null)
   const suppressClick = useRef(false)
+  const autoScroll = useRef({ frame: null, speed: 0 })
   const callbacks = useRef({ onStart, onMove, onDrop })
   callbacks.current = { onStart, onMove, onDrop }
 
   function clearTimer() { if (gesture.current?.timer) clearTimeout(gesture.current.timer) }
+  function stopAutoScroll() {
+    if (autoScroll.current.frame) cancelAnimationFrame(autoScroll.current.frame)
+    autoScroll.current = { frame: null, speed: 0 }
+  }
+  function updateAutoScroll(pointerY) {
+    const edge = Math.min(120, window.innerHeight * .2)
+    const maxSpeed = 18
+    let speed = 0
+    if (pointerY < edge) speed = -maxSpeed * Math.pow((edge - Math.max(0, pointerY)) / edge, 1.5)
+    else if (pointerY > window.innerHeight - edge) speed = maxSpeed * Math.pow((Math.min(window.innerHeight, pointerY) - (window.innerHeight - edge)) / edge, 1.5)
+    autoScroll.current.speed = speed
+    if (!speed) { stopAutoScroll(); return }
+    if (autoScroll.current.frame) return
+    const scroll = () => {
+      if (!gesture.current?.active || !autoScroll.current.speed) { stopAutoScroll(); return }
+      window.scrollBy({ top: autoScroll.current.speed })
+      autoScroll.current.frame = requestAnimationFrame(scroll)
+    }
+    autoScroll.current.frame = requestAnimationFrame(scroll)
+  }
   function finish(cancelled = false) {
     const current = gesture.current
     if (!current) return
     clearTimer()
+    stopAutoScroll()
     gesture.current = null
     setDraggingId(null)
     setOverId(null)
     if (current.suppressClick) { suppressClick.current = true; setTimeout(() => { suppressClick.current = false }, 0) }
     if (current.active && !cancelled) callbacks.current.onDrop?.(current.id)
   }
-  useEffect(() => () => clearTimer(), [])
+  useEffect(() => () => { clearTimer(); stopAutoScroll() }, [])
 
   function bind(id, baseClass = '') {
     const className = `${baseClass}${draggingId === id ? ' reorder-dragging' : ''}${overId === id && draggingId !== id ? ' reorder-over' : ''}`
@@ -65,9 +87,7 @@ export function usePressDragReorder({ disabled = false, onStart, onMove, onDrop 
           callbacks.current.onMove?.(id, targetId)
           navigator.vibrate?.(7)
         }
-        const edge = 74
-        if (event.clientY < edge) window.scrollBy({ top: -10 })
-        else if (event.clientY > window.innerHeight - edge) window.scrollBy({ top: 10 })
+        updateAutoScroll(event.clientY)
       },
       onPointerUp() { finish(false) },
       onPointerCancel() { finish(true) },
