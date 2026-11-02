@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import { ClerkProvider, ClerkLoaded, SignedIn, SignedOut, SignInButton, UserButton, useUser } from '@clerk/clerk-react'
 import { TeamEdit } from './TeamEdit'
 import { TeamView } from './TeamView'
+import { TeamsPage } from './TeamsPage'
 import { Icon } from './ui'
 import { AppLoadingProvider, StartupReady, useAppLoading } from './LoadingScreen'
 import './style.css'
@@ -10,6 +11,7 @@ import './theme.css'
 import './zoom.css'
 import './orientation.css'
 import './music-drawer.css'
+import './teams-page.css'
 
 const key = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
 const appUrl = new URL(import.meta.env.BASE_URL, window.location.origin).href
@@ -30,9 +32,14 @@ function Header({ account }) {
 function App() {
   const { user } = useUser()
   const { navigate } = useAppLoading()
-  const getRoute = () => window.location.hash === '#/team/edit' ? 'edit' : 'view'
+  const getRoute = () => {
+    const parts = window.location.hash.replace(/^#\/?/, '').split('/').filter(Boolean)
+    if (parts[0] === 'team' && parts[1] === 'new') return { page: 'edit', teamId: null, key: 'team/new' }
+    if (parts[0] === 'team' && parts[1]) return { page: parts[2] === 'edit' ? 'edit' : 'view', teamId: parts[1], key: `team/${parts[1]}${parts[2] === 'edit' ? '/edit' : ''}` }
+    return { page: 'teams', teamId: null, key: 'teams' }
+  }
   const [route, setRoute] = useState(getRoute)
-  const routeRef = useRef(route)
+  const routeRef = useRef(route.key)
   const dirty = useRef(false)
   const saving = useRef(false)
   const onDirtyChange = useCallback(value => { dirty.current = value }, [])
@@ -44,27 +51,32 @@ function App() {
   useEffect(() => {
     const change = () => {
       const next = getRoute()
-      if (next !== routeRef.current && !canLeave()) {
-        window.history.replaceState(null, '', routeRef.current === 'edit' ? '#/team/edit' : '#/team')
+      if (next.key !== routeRef.current && !canLeave()) {
+        window.history.replaceState(null, '', `#/${routeRef.current}`)
         return
       }
-      routeRef.current = next
+      routeRef.current = next.key
       setRoute(next)
     }
     window.addEventListener('hashchange', change)
     return () => window.removeEventListener('hashchange', change)
   }, [])
   function go(href) {
-    const next = href === '#/team/edit' ? 'edit' : 'view'
-    if (next !== routeRef.current && !canLeave()) return
+    const nextKey = href.replace(/^#\//, '')
+    if (nextKey !== routeRef.current && !canLeave()) return
     // The route listener must not ask twice after a confirmed departure.
-    if (next !== routeRef.current) dirty.current = false
+    if (nextKey !== routeRef.current) dirty.current = false
     navigate(href)
   }
   if (!user) return null
-  return <div className={`app ${route === 'view' ? 'team-view-app' : ''}`}>
+  const content = route.page === 'teams'
+    ? <TeamsPage key={`teams-${user.id}`} onSelect={id => go(`#/team/${id}`)} onAdd={() => go('#/team/new')} />
+    : route.page === 'edit'
+      ? <TeamEdit key={`edit-${route.teamId || 'new'}`} userId={user.id} teamId={route.teamId} onDirtyChange={onDirtyChange} onSavingChange={onSavingChange} onSaved={saved => go(`#/team/${saved.id}`)} onCancel={() => go(route.teamId ? `#/team/${route.teamId}` : '#/teams')} />
+      : <TeamView key={`view-${route.teamId}`} userId={user.id} teamId={route.teamId} onEdit={() => go(`#/team/${route.teamId}/edit`)} />
+  return <div className={`app ${route.page === 'view' ? 'team-view-app' : ''}`}>
     <Header account={<UserButton />} />
-    {route === 'edit' ? <TeamEdit key={`edit-${user.id}`} userId={user.id} onDirtyChange={onDirtyChange} onSavingChange={onSavingChange} onSaved={() => go('#/team')} onCancel={() => go('#/team')} /> : <TeamView key={`view-${user.id}`} userId={user.id} onEdit={() => go('#/team/edit')} />}
+    {content}
     <nav className="bottom-nav" aria-label="Main menu" onClick={event => {
       const link = event.target.closest('a[href]')
       if (!link || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
@@ -72,7 +84,7 @@ function App() {
       if (!href.startsWith('#/')) return
       event.preventDefault()
       go(href)
-    }}><a className="nav-item active" href="#/team" aria-current="page"><Icon /><span>Team</span></a></nav>
+    }}><a className="nav-item active" href="#/teams" aria-current="page"><Icon /><span>Teams</span></a></nav>
   </div>
 }
 function Welcome() {

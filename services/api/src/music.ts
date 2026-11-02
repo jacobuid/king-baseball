@@ -129,13 +129,19 @@ export async function handleMusicRequest(request: Request, env: MusicEnv, userId
     const raw = await request.text()
     if (raw.length > 16000) return json({ error: 'Too large' }, 413)
     const body = JSON.parse(raw) as { target?: string; tracks?: unknown[] }
-    if (body.target !== 'team' && !uuid.test(body.target || '')) return json({ error: 'Invalid assignment' }, 400)
-    if (!Array.isArray(body.tracks) || body.tracks.length > (body.target === 'team' ? 100 : 1)) return json({ error: 'Invalid track list' }, 400)
-    const teamEntries = body.target === 'team' ? body.tracks : []
-    const playerEntries = body.target === 'team' ? [] : body.tracks
+    const assignmentTarget = typeof body.target === 'string' ? body.target : ''
+    const teamTarget = assignmentTarget === 'team' || (assignmentTarget.startsWith('team:') && uuid.test(assignmentTarget.slice(5)))
+    if (!teamTarget && !uuid.test(body.target || '')) return json({ error: 'Invalid assignment' }, 400)
+    if (teamTarget && body.target !== 'team') {
+      const owned = await env.DB.prepare('SELECT 1 FROM teams WHERE id=? AND owner_user_id=?').bind(assignmentTarget.slice(5), userId).first()
+      if (!owned) return json({ error: 'Team not found' }, 404)
+    }
+    if (!Array.isArray(body.tracks) || body.tracks.length > (teamTarget ? 100 : 1)) return json({ error: 'Invalid track list' }, 400)
+    const teamEntries = teamTarget ? body.tracks : []
+    const playerEntries = teamTarget ? [] : body.tracks
     if (teamEntries.some(id => typeof id !== 'string' || !uuid.test(id)) || new Set(teamEntries).size !== teamEntries.length) return json({ error: 'Invalid track list' }, 400)
     if (playerEntries.some(entry => { const value = entry as PlayerAssignment; return typeof entry !== 'object' || entry === null || (!value.id && !value.introId) || (!!value.id && (!uuid.test(value.id) || !Number.isFinite(value.start) || !Number.isFinite(value.duration))) || (!!value.introId && !uuid.test(value.introId)) || (value.introStart !== undefined && (!Number.isFinite(value.introStart) || value.introStart < 0 || value.introStart > 60)) || (value.musicStart !== undefined && (!Number.isFinite(value.musicStart) || value.musicStart < 0 || value.musicStart > 60)) || (value.fadeIn !== undefined && typeof value.fadeIn !== 'boolean') || (value.fadeOut !== undefined && typeof value.fadeOut !== 'boolean') || (value.overlapReduction !== undefined && (!Number.isFinite(value.overlapReduction) || value.overlapReduction < 0 || value.overlapReduction > .9)) })) return json({ error: 'Choose a valid walk-up' }, 400)
-    const normalized: (string | PlayerAssignment)[] = body.target === 'team' ? teamEntries as string[] : playerEntries.map(entry => { const value = entry as PlayerAssignment; return { ...(value.id ? { id: value.id, start: Math.round(value.start! * 10) / 10, duration: Math.round(value.duration! * 10) / 10, ...(value.musicStart !== undefined ? { musicStart: Math.round(value.musicStart * 10) / 10 } : {}), ...(value.fadeIn !== undefined ? { fadeIn: value.fadeIn } : {}), ...(value.fadeOut !== undefined ? { fadeOut: value.fadeOut } : {}), ...(value.overlapReduction !== undefined ? { overlapReduction: Math.round(value.overlapReduction * 100) / 100 } : {}) } : {}), ...(value.introId ? { introId: value.introId, ...(value.introStart !== undefined ? { introStart: Math.round(value.introStart * 10) / 10 } : {}) } : {}) } })
+    const normalized: (string | PlayerAssignment)[] = teamTarget ? teamEntries as string[] : playerEntries.map(entry => { const value = entry as PlayerAssignment; return { ...(value.id ? { id: value.id, start: Math.round(value.start! * 10) / 10, duration: Math.round(value.duration! * 10) / 10, ...(value.musicStart !== undefined ? { musicStart: Math.round(value.musicStart * 10) / 10 } : {}), ...(value.fadeIn !== undefined ? { fadeIn: value.fadeIn } : {}), ...(value.fadeOut !== undefined ? { fadeOut: value.fadeOut } : {}), ...(value.overlapReduction !== undefined ? { overlapReduction: Math.round(value.overlapReduction * 100) / 100 } : {}) } : {}), ...(value.introId ? { introId: value.introId, ...(value.introStart !== undefined ? { introStart: Math.round(value.introStart * 10) / 10 } : {}) } : {}) } })
     for (const entry of normalized) {
       const id = typeof entry === 'string' ? entry : entry.id
       const owned = id ? await env.DB.prepare("SELECT id,duration,kind FROM music_tracks WHERE id=? AND owner_user_id=? AND status='ready'").bind(id, userId).first<{ id: string; duration: number | null; kind: string }>() : null

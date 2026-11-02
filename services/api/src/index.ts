@@ -1,6 +1,6 @@
 import { createClerkClient } from '@clerk/backend'
 import { AwsClient } from 'aws4fetch'
-import { handleTeamRequest } from './teams'
+import { handleTeamListRequest, handleTeamRequest } from './teams'
 import { createLogoStorage } from './logo-storage'
 import { handleMusicRequest, handleMusicCallback, handleMusicContent, musicUploadUrl, type MusicEnv } from './music'
 
@@ -38,6 +38,7 @@ export default {
       const url = new URL(request.url)
       const path = url.pathname
       if (path === '/api/music' || path.startsWith('/api/music/')) return withCors(await handleMusicRequest(request, env, userId), cors)
+      if (path === '/api/teams' && request.method === 'GET') return withCors(await handleTeamListRequest(env.DB, userId, createLogoStorage(env)), cors)
       if (path === '/api/team') return withCors(await handleTeamRequest(request, env.DB, userId, createLogoStorage(env)), cors)
       if (path === '/api/profiles' && request.method === 'GET') {
         const rows = await env.DB.prepare('SELECT id,name FROM profiles WHERE user_id = ? ORDER BY created_at').bind(userId).all()

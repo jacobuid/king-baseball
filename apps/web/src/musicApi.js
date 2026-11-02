@@ -16,7 +16,8 @@ export function createMusicApi(getToken) {
 }
 export function mergeMusic(team, local, music) {
   const byId = new Map(music.tracks.map(track => [track.id, track]))
-  return { ...team, teamSongs: (music.assignments.team || []).map(id => byId.get(id)).filter(Boolean), players: team.players.map(player => {
+  const teamAssignment = music.assignments[`team:${team.id}`] || music.assignments.team || []
+  return { ...team, teamSongs: teamAssignment.map(id => byId.get(id)).filter(Boolean), players: team.players.map(player => {
     const assignment = music.assignments[player.id]?.[0]
     const id = typeof assignment === 'string' ? assignment : assignment?.id
     const track = id ? byId.get(id) : null

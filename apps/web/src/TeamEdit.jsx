@@ -10,7 +10,7 @@ import { DivisionPicker } from './DivisionPicker'
 import { TeamLogoUpload } from './TeamLogoUpload'
 import { usePressDragReorder } from './usePressDragReorder'
 
-export function TeamEdit({ userId, onSaved, onCancel, onDirtyChange, onSavingChange }) {
+export function TeamEdit({ userId, teamId, onSaved, onCancel, onDirtyChange, onSavingChange }) {
   const { getToken } = useAuth()
   const requestTeam = useMemo(() => createTeamApi(getToken), [getToken])
   const requestMusic = useMemo(() => createMusicApi(getToken), [getToken])
@@ -26,7 +26,8 @@ export function TeamEdit({ userId, onSaved, onCancel, onDirtyChange, onSavingCha
   const [logoBusy, setLogoBusy] = useState(false)
   const [players, setPlayers] = useState([])
   const [playerName, setPlayerName] = useState('')
-  const [selected, setSelected] = useState(null)
+  const [selected, setSelectedState] = useState(null)
+  const setSelected = value => setSelectedState(value?.id === 'team' && teamId ? { ...value, assignmentTarget: `team:${teamId}` } : value)
   const [jerseyPlayer, setJerseyPlayer] = useState(null)
   const [status, setStatus] = useState('')
   const [error, setError] = useState('')
@@ -41,9 +42,15 @@ export function TeamEdit({ userId, onSaved, onCancel, onDirtyChange, onSavingCha
     setLoadFailed(false)
     setError('')
     try {
+      if (!teamId) {
+        if (!isActive()) return
+        setVersion(0); setTeamName(''); setDivision(null); setPrimaryColor('#041c36'); setLogoDataUrl(undefined); setLogoUrl(null); setPlayers([]); setTeamSongs([])
+        dirty.current = false; onDirtyChange(false)
+        return
+      }
       // A server failure must never be treated as an empty team.
-      const saved = await requestTeam()
-      const local = await teamStorage(userId).catch(() => null)
+      const saved = await requestTeam(undefined, teamId)
+      const local = await teamStorage(userId, undefined, teamId).catch(() => null)
       if (!isActive()) return
       const music = await requestMusic()
       if (!isActive()) return
@@ -63,7 +70,7 @@ export function TeamEdit({ userId, onSaved, onCancel, onDirtyChange, onSavingCha
     } catch (error) {
       if (isActive()) { setLoadFailed(true); setError(error.message || 'Could not load your team. Check your connection and retry.') }
     } finally { if (isActive()) setLoading(false) }
-  }, [requestTeam, requestMusic, userId, onDirtyChange])
+  }, [requestTeam, requestMusic, userId, teamId, onDirtyChange])
   useEffect(() => {
     let active = true
     loadTeam(() => active)
@@ -102,7 +109,7 @@ export function TeamEdit({ userId, onSaved, onCancel, onDirtyChange, onSavingCha
     if (loadFailed || logoBusy) { setError('Wait for your team and logo to finish loading before saving.'); return false }
     setSaving(true); setError('')
     try {
-      const saved = await requestTeam({ name: teamName.trim(), division, primaryColor, logoDataUrl, version, players: nextPlayers })
+      const saved = await requestTeam({ name: teamName.trim(), division, primaryColor, logoDataUrl, version, players: nextPlayers }, teamId, !teamId)
       setVersion(saved.version)
       setTeamName(saved.name)
       setLogoUrl(saved.logoUrl || saved.logoDataUrl || null)
@@ -112,7 +119,7 @@ export function TeamEdit({ userId, onSaved, onCancel, onDirtyChange, onSavingCha
       onDirtyChange(false)
       setStatus('Team and players saved to your account.')
       // Preserve legacy device audio while imported songs sync independently.
-      try { await teamStorage(userId, { name: saved.name, division, primaryColor, players: nextPlayers }) }
+      try { await teamStorage(userId, { ...saved, players: nextPlayers }, saved.id) }
       catch { setStatus('Team and players saved online. Device-only music could not be saved.') }
       if (showConfirmation) { onSavingChange(false); onSaved(saved) }
       return true

@@ -44,10 +44,10 @@ export function validateTeam(body: unknown): TeamInput | string {
   return { name, version: input.version as number, players, logoDataUrl: input.logoDataUrl as string | null | undefined, division: input.division as string | null | undefined, primaryColor: (input.primaryColor as string | undefined)?.toLowerCase() }
 }
 
-async function readTeam(db: D1Database, userId: string, storage: LogoStorage) {
+async function readTeam(db: D1Database, userId: string, storage: LogoStorage, teamId?: string | null) {
   const result = await db.batch([
-    db.prepare('SELECT id,name,version,division,primary_color AS primaryColor,logo_key AS logoKey,logo_data_url AS logoDataUrl,created_at,updated_at FROM teams WHERE owner_user_id = ?').bind(userId),
-    db.prepare('SELECT p.id,p.name,p.jersey_number AS jerseyNumber,p.roster_order AS rosterOrder FROM players p JOIN teams t ON t.id = p.team_id WHERE t.owner_user_id = ? ORDER BY p.roster_order').bind(userId),
+    teamId ? db.prepare('SELECT id,name,version,division,primary_color AS primaryColor,logo_key AS logoKey,logo_data_url AS logoDataUrl,created_at,updated_at FROM teams WHERE owner_user_id = ? AND id = ?').bind(userId, teamId) : db.prepare('SELECT id,name,version,division,primary_color AS primaryColor,logo_key AS logoKey,logo_data_url AS logoDataUrl,created_at,updated_at FROM teams WHERE owner_user_id = ? ORDER BY created_at LIMIT 1').bind(userId),
+    teamId ? db.prepare('SELECT p.id,p.name,p.jersey_number AS jerseyNumber,p.roster_order AS rosterOrder FROM players p JOIN teams t ON t.id = p.team_id WHERE t.owner_user_id = ? AND t.id = ? ORDER BY p.roster_order').bind(userId, teamId) : db.prepare('SELECT p.id,p.name,p.jersey_number AS jerseyNumber,p.roster_order AS rosterOrder FROM players p JOIN teams t ON t.id = p.team_id WHERE t.owner_user_id = ? AND t.id=(SELECT id FROM teams WHERE owner_user_id=? ORDER BY created_at LIMIT 1) ORDER BY p.roster_order').bind(userId,userId),
   ])
   const team = result[0].results[0] as Record<string, unknown> | undefined
   if (!team) return null
@@ -56,8 +56,20 @@ async function readTeam(db: D1Database, userId: string, storage: LogoStorage) {
 }
 
 export async function handleTeamRequest(request: Request, db: D1Database, userId: string, storage: LogoStorage): Promise<Response> {
-  if (request.method === 'GET') return json({ team: await readTeam(db, userId, storage) })
-  if (request.method !== 'PUT') return new Response(JSON.stringify({ error: 'Method not allowed' }), { status: 405, headers: { Allow: 'GET, PUT', 'Content-Type': 'application/json' } })
+  const url = new URL(request.url)
+  const requestedId = url.searchParams.get('id')
+  const createNew = url.searchParams.get('new') === '1'
+  if (!['GET', 'PUT', 'DELETE'].includes(request.method)) return new Response(JSON.stringify({ error: 'Method not allowed' }), { status: 405, headers: { Allow: 'GET, PUT, DELETE', 'Content-Type': 'application/json' } })
+  if (requestedId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(requestedId)) return json({ error: 'Invalid team' }, 400)
+  if (request.method === 'GET') return json({ team: await readTeam(db, userId, storage, requestedId) })
+  if (request.method === 'DELETE') {
+    if (!requestedId) return new Response(JSON.stringify({ error: 'Method not allowed' }), { status: 405, headers: { Allow: 'GET, PUT, DELETE', 'Content-Type': 'application/json' } })
+    const team = await db.prepare('SELECT logo_key FROM teams WHERE id=? AND owner_user_id=?').bind(requestedId,userId).first<{logo_key:string|null}>()
+    if (!team) return json({ error: 'Team not found' }, 404)
+    await db.batch([db.prepare('DELETE FROM music_assignments WHERE owner_user_id=? AND (target=? OR target IN (SELECT id FROM players WHERE team_id=?))').bind(userId,`team:${requestedId}`,requestedId),db.prepare('DELETE FROM players WHERE team_id=?').bind(requestedId),db.prepare('DELETE FROM teams WHERE id=? AND owner_user_id=?').bind(requestedId,userId)])
+    if (team.logo_key) await storage.remove(team.logo_key).catch(() => {})
+    return json({ ok: true })
+  }
   if (!request.headers.get('Content-Type')?.toLowerCase().startsWith('application/json')) return json({ error: 'Use application/json' }, 415)
   // Bound the complete body, including unknown fields, before parsing it.
   const reader = request.body?.getReader()
@@ -79,7 +91,7 @@ export async function handleTeamRequest(request: Request, db: D1Database, userId
   const input = validateTeam(body)
   if (typeof input === 'string') return json({ error: input }, 400)
 
-  const existing = await db.prepare('SELECT id,name,version,mutation_id,logo_data_url,logo_key,division,primary_color FROM teams WHERE owner_user_id = ?').bind(userId).first<TeamRow>()
+  const existing = requestedId ? await db.prepare('SELECT id,name,version,mutation_id,logo_data_url,logo_key,division,primary_color FROM teams WHERE owner_user_id = ? AND id=?').bind(userId,requestedId).first<TeamRow>() : createNew ? null : await db.prepare('SELECT id,name,version,mutation_id,logo_data_url,logo_key,division,primary_color FROM teams WHERE owner_user_id = ? ORDER BY created_at LIMIT 1').bind(userId).first<TeamRow>()
   if ((!existing && input.version !== 0) || (existing && input.version !== existing.version)) return json({ error: 'This team changed in another session. Reload the saved team before saving again.' }, 409)
   const teamId = existing?.id || crypto.randomUUID()
   const mutationId = crypto.randomUUID()
@@ -101,7 +113,7 @@ export async function handleTeamRequest(request: Request, db: D1Database, userId
   const statements = existing ? [
     db.prepare('UPDATE teams SET name = ?,logo_data_url = NULL,logo_key = ?,division = ?,primary_color = ?,version = version + 1,mutation_id = ?,updated_at = CURRENT_TIMESTAMP WHERE id = ? AND owner_user_id = ? AND version = ?').bind(input.name, logoKey, division, primaryColor, mutationId, teamId, userId, input.version),
   ] : [
-    db.prepare('INSERT INTO teams(id,owner_user_id,name,mutation_id,logo_key,division,primary_color) VALUES(?,?,?,?,?,?,?) ON CONFLICT(owner_user_id) DO NOTHING').bind(teamId, userId, input.name, mutationId, logoKey, division, primaryColor),
+    db.prepare('INSERT INTO teams(id,owner_user_id,name,mutation_id,logo_key,division,primary_color) VALUES(?,?,?,?,?,?,?)').bind(teamId, userId, input.name, mutationId, logoKey, division, primaryColor),
   ]
   // All roster writes are conditional on this save winning the version check.
   // D1 executes the batch transactionally, including deletions and insertions.
@@ -119,4 +131,10 @@ export async function handleTeamRequest(request: Request, db: D1Database, userId
   // Return this mutation's result, rather than a separate read which could race a later save.
   // Keep prior successful objects intact: another tab may still be displaying a signed URL.
   return json({ team: { id: teamId, name: input.name, logoDataUrl: null, logoUrl, division, primaryColor, version: input.version + 1, players: input.players.map((player, rosterOrder) => ({ ...player, rosterOrder })) } }, existing ? 200 : 201)
+}
+
+export async function handleTeamListRequest(db: D1Database, userId: string, storage: LogoStorage): Promise<Response> {
+  const rows = await db.prepare('SELECT id,name,division,primary_color AS primaryColor,logo_key AS logoKey,(SELECT count(*) FROM players WHERE team_id=teams.id) AS playerCount,updated_at AS updatedAt FROM teams WHERE owner_user_id=? ORDER BY updated_at DESC').bind(userId).all<Record<string,unknown>>()
+  const teams = await Promise.all(rows.results.map(async row => { const { logoKey,...team }=row; return {...team,logoUrl:logoKey ? await storage.url(logoKey as string):null} }))
+  return json({ teams })
 }

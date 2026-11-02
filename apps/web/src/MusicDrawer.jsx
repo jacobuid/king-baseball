@@ -78,6 +78,8 @@ function BuildWalkup({ introDuration, musicDuration, introStart, musicStart, fad
   return <section className="build-walkup"><div className="build-walkup-heading"><span className="walkup-clip-icon"><Icon name="sliders" size={18} /></span><div><h2>Build Walk-up</h2><p>Drag either clip to control its timing and overlap.</p></div></div><div className="walkup-timeline" style={{ '--timeline-seconds': scale }}><div className="walkup-timeline-ruler"><span>0:00</span><span>{time(scale / 2)}</span><span>{time(scale)}</span></div><TimingClip label="Announcement" icon="microphone" start={Math.min(introStart, introMaxStart)} duration={introDuration} scale={scale} maxStart={introMaxStart} onChange={onIntroStart} /><TimingClip label="Music" icon="music" start={Math.min(musicStart, musicMaxStart)} duration={musicDuration} scale={scale} maxStart={musicMaxStart} onChange={onMusicStart} /></div><div className="walkup-timing-summary"><span>Total timeline</span><strong>{time(scale)}</strong></div><div className="walkup-fades"><div><span><strong>Fade in</strong><small>Ease the music in</small></span><button type="button" className={`walkup-switch${fadeIn ? ' on' : ''}`} role="switch" aria-checked={fadeIn} onClick={() => onFadeIn(!fadeIn)}><span /></button></div><div><span><strong>Fade out</strong><small>Ease the music out</small></span><button type="button" className={`walkup-switch${fadeOut ? ' on' : ''}`} role="switch" aria-checked={fadeOut} onClick={() => onFadeOut(!fadeOut)}><span /></button></div></div><label className="walkup-ducking"><span><strong>Decrease music during overlap</strong><output>{Math.round((1 - overlapReduction) * 100)}%</output></span><input type="range" min="10" max="100" step="5" value={Math.round((1 - overlapReduction) * 100)} onChange={event => onOverlapReduction(1 - Number(event.target.value) / 100)} /></label><button type="button" className="build-walkup-preview button-secondary" disabled={busy} onClick={onPreview}><Icon name={playing ? 'stop' : 'play'} size={16} />{playing ? 'Stop full preview' : 'Preview full walk-up'}</button></section>
 }
 export function MusicDrawer({ api, target, player, onClose, onAssigned }) {
+  target = player.assignmentTarget || target
+  const team = target === 'team' || target.startsWith('team:')
   const [library, setLibrary] = useState(null)
   const [query, setQuery] = useState('')
   const [results, setResults] = useState([])
@@ -128,7 +130,7 @@ export function MusicDrawer({ api, target, player, onClose, onAssigned }) {
     api().then(data => { if (active.current) {
       setLibrary(data)
       const entries = data.assignments[target] || []
-      if (target === 'team') setSelected(entries)
+      if (team) setSelected(entries)
       else {
         const assignment = entries[0]
         const id = assignmentId(assignment)
@@ -148,7 +150,7 @@ export function MusicDrawer({ api, target, player, onClose, onAssigned }) {
       }
     } }).catch(e => { if (active.current) setError(e.message) })
     return () => { active.current = false; previewSequence.current++; preview.current?.pause(); introPreview.current?.pause(); clearTimeout(closeTimer.current); clearInterval(clipTimer.current); recorder.current?.state === 'recording' && recorder.current.stop() }
-  }, [api, target, retry])
+  }, [api, target, team, retry])
   function closeDrawer() {
     if (closing) return
     setClosing(true)
@@ -208,7 +210,7 @@ export function MusicDrawer({ api, target, player, onClose, onAssigned }) {
       if (active.current) {
         setLibrary(data)
         const entries = data.assignments[target] || []
-        if (target === 'team') setSelected(entries)
+        if (team) setSelected(entries)
         else if (!entries.length) setClipTrackId(null)
         onAssigned(entries.map(entry => {
           const item = data.tracks.find(track => track.id === assignmentId(entry))
@@ -338,7 +340,7 @@ export function MusicDrawer({ api, target, player, onClose, onAssigned }) {
     try {
       await api('/assign', { target, tracks: entries }, 'PUT')
       if (active.current) {
-        if (target !== 'team') {
+        if (!team) {
           const savedIntroId = typeof entries[0] === 'object' ? entries[0].introId : null
           if (savedIntroId) temporaryIntroIds.current.delete(savedIntroId)
           const previousIntroId = player.song?.intro?.id
@@ -447,7 +449,6 @@ export function MusicDrawer({ api, target, player, onClose, onAssigned }) {
       }
     } catch (e) { if (active.current && sequence === previewSequence.current) setError(e.message) }
   }
-  const team = target === 'team'
   const songTracks = library?.tracks.filter(track => track.kind !== 'intro') || []
   const introTrack = library?.tracks.find(track => track.id === introTrackId)
   const clipTrack = library?.tracks.find(track => track.id === clipTrackId)

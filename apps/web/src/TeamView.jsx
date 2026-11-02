@@ -21,7 +21,7 @@ function shuffleSongIds(ids) {
   return shuffled
 }
 
-export function TeamView({ userId, onEdit }) {
+export function TeamView({ userId, teamId, onEdit }) {
   const { getToken } = useAuth()
   const requestTeam = useMemo(() => createTeamApi(getToken), [getToken])
   const requestMusic = useMemo(() => createMusicApi(getToken), [getToken])
@@ -64,7 +64,7 @@ export function TeamView({ userId, onEdit }) {
       if (!ordered) return
       setSavingOrder(true); setError('')
       try {
-        const saved = await requestTeam(ordered)
+        const saved = await requestTeam(ordered, teamId)
         setTeam(current => current ? { ...current, version: saved.version } : current)
         previousOrder.current = null
       } catch (error) {
@@ -77,13 +77,13 @@ export function TeamView({ userId, onEdit }) {
     let active = true
     setLoading(true)
     setError('')
-    requestTeam().then(async saved => {
-      const local = await teamStorage(userId).catch(() => null)
+    requestTeam(undefined, teamId).then(async saved => {
+      const local = await teamStorage(userId, undefined, teamId).catch(() => null)
       const music = await requestMusic()
       if (active) { const merged = saved ? mergeMusic(saved, local, music) : null; teamOrder.current = merged; setTeam(merged) }
     }).catch(error => { if (active) setError(error.message || 'Could not load your team.') }).finally(() => { if (active) setLoading(false) })
     return () => { active = false }
-  }, [requestTeam, requestMusic, userId, retry])
+  }, [requestTeam, requestMusic, userId, teamId, retry])
 
   const allSongs = useMemo(() => [...(team?.players || []).filter(player => player.song).map(player => ({ ...player.song, playbackId: player.id, playerName: player.name, jerseyNumber: player.jerseyNumber })), ...(team?.teamSongs || []).map(song => ({ ...song, playbackId: 'team-' + song.id }))], [team])
   const activeSong = allSongs.find(song => song.playbackId === activeId)
