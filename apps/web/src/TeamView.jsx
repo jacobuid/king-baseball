@@ -6,6 +6,7 @@ import { teamStorage } from './teamStorage'
 import { createTeamTheme } from './teamTheme'
 import { createMusicApi, mergeMusic } from './musicApi'
 import { audioEnvelopeLevel, ensureAudioGain, overlapMusicLevel, resetAudioGain, setAudioGain } from './audioFade'
+import { usePressDragReorder } from './usePressDragReorder'
 import './team-playlist.css'
 
 function shuffleSongIds(ids) {
@@ -33,11 +34,45 @@ export function TeamView({ userId, onEdit }) {
   const [playlistMode, setPlaylistMode] = useState(false)
   const [playlistOpen, setPlaylistOpen] = useState(false)
   const [shuffle, setShuffle] = useState(false)
+  const [savingOrder, setSavingOrder] = useState(false)
   const audio = useRef(null)
   const introAudio = useRef(null)
   const clipTimer = useRef(null)
   const musicGraph = useRef(null)
   const queue = useRef([])
+  const teamOrder = useRef(null)
+  const previousOrder = useRef(null)
+  const playerReorder = usePressDragReorder({
+    disabled: loading || savingOrder,
+    onStart() { previousOrder.current = teamOrder.current },
+    onMove(fromId, toId) {
+      setTeam(current => {
+        if (!current) return current
+        const from = current.players.findIndex(player => player.id === fromId)
+        const to = current.players.findIndex(player => player.id === toId)
+        if (from < 0 || to < 0 || from === to) return current
+        const players = [...current.players]
+        const [player] = players.splice(from, 1)
+        players.splice(to, 0, player)
+        const next = { ...current, players }
+        teamOrder.current = next
+        return next
+      })
+    },
+    async onDrop() {
+      const ordered = teamOrder.current
+      if (!ordered) return
+      setSavingOrder(true); setError('')
+      try {
+        const saved = await requestTeam(ordered)
+        setTeam(current => current ? { ...current, version: saved.version } : current)
+        previousOrder.current = null
+      } catch (error) {
+        if (previousOrder.current) { teamOrder.current = previousOrder.current; setTeam(previousOrder.current) }
+        setError(error.message || 'Could not save the new player order.')
+      } finally { setSavingOrder(false) }
+    },
+  })
   useEffect(() => {
     let active = true
     setLoading(true)
@@ -45,7 +80,7 @@ export function TeamView({ userId, onEdit }) {
     requestTeam().then(async saved => {
       const local = await teamStorage(userId).catch(() => null)
       const music = await requestMusic()
-      if (active) setTeam(saved ? mergeMusic(saved, local, music) : null)
+      if (active) { const merged = saved ? mergeMusic(saved, local, music) : null; teamOrder.current = merged; setTeam(merged) }
     }).catch(error => { if (active) setError(error.message || 'Could not load your team.') }).finally(() => { if (active) setLoading(false) })
     return () => { active = false }
   }, [requestTeam, requestMusic, userId, retry])
@@ -194,7 +229,7 @@ export function TeamView({ userId, onEdit }) {
         <div className="view-roster">{team.players.map(player => {
           const available = player.song?.status === 'ready' || player.song?.file instanceof Blob
           const isPlaying = activeId === player.id && playing
-          return <article key={player.id} className={`view-player ${isPlaying ? 'playing' : ''}`}>
+          return <article key={player.id} {...playerReorder.bind(player.id, `view-player ${isPlaying ? 'playing' : ''}`)}>
             <div className="view-jersey"><Icon name="jersey" size={46} /><span>{player.jerseyNumber ?? '--'}</span></div>
             <div className="view-player-info"><h3>{player.name}</h3><p><Icon name="music" size={14} />{available ? 'Walk-up music assigned' : player.song ? 'Add audio in Edit Team' : 'No walk-up music yet'}</p></div>
             {isPlaying && <div className="view-wave" aria-hidden="true">{[10, 20, 30, 16, 26].map((height, index) => <span key={index} style={{ height, animationDelay: `${index * .12}s` }} />)}</div>}
