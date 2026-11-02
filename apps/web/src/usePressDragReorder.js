@@ -6,6 +6,7 @@ export function usePressDragReorder({ disabled = false, onStart, onMove, onDrop 
   const gesture = useRef(null)
   const suppressClick = useRef(false)
   const autoScroll = useRef({ frame: null, speed: 0 })
+  const reorderAnimations = useRef(new WeakMap())
   const callbacks = useRef({ onStart, onMove, onDrop })
   callbacks.current = { onStart, onMove, onDrop }
 
@@ -65,11 +66,27 @@ export function usePressDragReorder({ disabled = false, onStart, onMove, onDrop 
     event.preventDefault()
     const target = document.elementFromPoint(event.clientX, event.clientY)?.closest?.('[data-reorder-id]')
     const targetId = target?.dataset.reorderId
-    if (targetId && targetId !== current.overId) {
+    if (targetId && targetId !== current.overId && performance.now() - (current.lastSwap || 0) > 180) {
+      const before = new Map([...document.querySelectorAll('[data-reorder-id]')].map(row => [row.dataset.reorderId, row.getBoundingClientRect()]))
+      current.lastSwap = performance.now()
       current.overId = targetId
       setOverId(targetId)
       callbacks.current.onMove?.(current.id, targetId)
       navigator.vibrate?.(7)
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        document.querySelectorAll('[data-reorder-id]').forEach(row => {
+          const previous = before.get(row.dataset.reorderId)
+          if (!previous) return
+          const next = row.getBoundingClientRect()
+          const delta = previous.top - next.top
+          if (Math.abs(delta) < 1 || !row.animate) return
+          reorderAnimations.current.get(row)?.cancel()
+          const scale = row.dataset.reorderId === current.id ? ' scale(1.045)' : ''
+          const animation = row.animate([{ transform: `translateY(${delta}px)${scale}` }, { transform: `translateY(0)${scale}` }], { duration: 320, easing: 'cubic-bezier(.22, 1, .36, 1)' })
+          reorderAnimations.current.set(row, animation)
+          animation.onfinish = () => reorderAnimations.current.delete(row)
+        })
+      }))
     }
     updateAutoScroll(event.clientY)
   }
