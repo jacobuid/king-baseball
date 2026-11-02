@@ -81,6 +81,7 @@ export function TeamEdit({ userId, teamId, onSaved, onCancel, onDirtyChange, onS
   function changed() { dirty.current = true; onDirtyChange(true); setStatus('Unsaved changes'); setError('') }
   const playerReorder = usePressDragReorder({
     disabled: loading || saving,
+    swipeDelete: true,
     onMove(fromId, toId) {
       setPlayers(current => {
         const from = current.findIndex(player => player.id === fromId)
